@@ -1,0 +1,377 @@
+"use strict";
+/*
+ * Aminakawa interpreter — JavaScript port.
+ * Runs .amkawa files with no external runtime (VSCode already has Node).
+ * Exports: run(code, io) where io = { output(str), input(prompt)->Promise<string> }.
+ * Also usable from Node for testing:  node amkawa.js file.amkawa
+ */
+
+class AmkError extends Error {
+  constructor(msg, line = null) { super(msg); this.amk = true; this.line = line; }
+  toString() { return this.line ? ("line " + this.line + ": " + this.message) : this.message; }
+}
+
+const KEYWORDS = new Set(["tyan", "back", "moshi", "else", "while", "for", "in", "and", "or", "not", "hai", "iie", "mu"]);
+const ID_START = /[_\p{L}]/u;
+const ID_CONT = /[_\p{L}\p{N}]/u;
+const DIGIT = /[0-9]/;
+
+function lex(src) {
+  const toks = []; let i = 0; const n = src.length; let line = 1;
+  const push = (t, v) => toks.push({ type: t, value: v, line });
+  while (i < n) {
+    const c = src[i];
+    if (c === "\n") { push("NL", "\n"); line++; i++; continue; }
+    if (c === " " || c === "\t" || c === "\r") { i++; continue; }
+    if (c === "#") { while (i < n && src[i] !== "\n") i++; continue; }
+    if (c === '"' || c === "'") {
+      const q = c; i++; let buf = "";
+      while (i < n && src[i] !== q) {
+        let ch = src[i];
+        if (ch === "\\" && i + 1 < n) {
+          const nx = src[i + 1];
+          const map = { n: "\n", t: "\t", "\\": "\\", '"': '"', "'": "'" };
+          buf += (map[nx] !== undefined ? map[nx] : nx); i += 2; continue;
+        }
+        if (ch === "\n") line++;
+        buf += ch; i++;
+      }
+      if (i >= n) throw new AmkError("string is missing a closing quote", line);
+      i++; push("STR", buf); continue;
+    }
+    if (DIGIT.test(c) || (c === "." && i + 1 < n && DIGIT.test(src[i + 1]))) {
+      let start = i, dot = false;
+      while (i < n && (DIGIT.test(src[i]) || src[i] === ".")) {
+        if (src[i] === ".") { if (dot) break; dot = true; }
+        i++;
+      }
+      push("NUM", parseFloat(src.slice(start, i))); continue;
+    }
+    if (ID_START.test(c)) {
+      let start = i;
+      while (i < n && ID_CONT.test(src[i])) i++;
+      const w = src.slice(start, i);
+      push(KEYWORDS.has(w) ? w : "NAME", w); continue;
+    }
+    const two = src.slice(i, i + 2);
+    if (two === "==" || two === "!=" || two === "<=" || two === ">=") { push("OP", two); i += 2; continue; }
+    if ("+-*/%()<>{}[],=".includes(c)) { push("OP", c); i++; continue; }
+    throw new AmkError("unexpected character '" + c + "'", line);
+  }
+  push("EOF", null);
+  return toks;
+}
+
+class Parser {
+  constructor(toks) { this.toks = toks; this.i = 0; }
+  peek() { return this.toks[this.i]; }
+  adv() { return this.toks[this.i++]; }
+  at(...types) { return types.includes(this.peek().type); }
+  atOp(v) { const t = this.peek(); return t.type === "OP" && t.value === v; }
+  eatOp(v, what) { if (!this.atOp(v)) throw new AmkError("expected " + (what || ("'" + v + "'")), this.peek().line); return this.adv(); }
+  expect(type, what) { if (this.peek().type !== type) throw new AmkError("expected " + (what || type), this.peek().line); return this.adv(); }
+  skipNL() { while (this.at("NL")) this.adv(); }
+
+  parse() { const stmts = []; this.skipNL(); while (!this.at("EOF")) { stmts.push(this.statement()); this.skipNL(); } return { k: "Program", stmts }; }
+
+  statement() {
+    const t = this.peek();
+    if (t.type === "tyan") return this.funcdef();
+    if (t.type === "moshi") return this.ifStmt();
+    if (t.type === "while") return this.whileStmt();
+    if (t.type === "for") return this.forStmt();
+    if (t.type === "back") return this.returnStmt();
+    const expr = this.expression();
+    if (this.atOp("=")) {
+      const line = this.adv().line;
+      const value = this.expression();
+      if (expr.k !== "Name" && expr.k !== "Index") throw new AmkError("left of '=' must be a variable name", line);
+      return { k: "Assign", target: expr, value, line };
+    }
+    return { k: "ExprS", expr };
+  }
+  block() { this.eatOp("{", "'{'"); const stmts = []; this.skipNL(); while (!this.atOp("}") && !this.at("EOF")) { stmts.push(this.statement()); this.skipNL(); } this.eatOp("}", "'}'"); return { k: "Block", stmts }; }
+  funcdef() { const line = this.adv().line; const name = this.expect("NAME", "function name").value; this.eatOp("(", "'('"); const params = []; if (!this.atOp(")")) { params.push(this.expect("NAME", "parameter name").value); while (this.atOp(",")) { this.adv(); params.push(this.expect("NAME", "parameter name").value); } } this.eatOp(")", "')'"); return { k: "Func", name, params, body: this.block(), line }; }
+  ifStmt() { this.adv(); const cond = this.expression(); const then = this.block(); let els = null; this.skipNL(); if (this.at("else")) { this.adv(); this.skipNL(); els = this.at("moshi") ? this.ifStmt() : this.block(); } return { k: "If", cond, then, els }; }
+  whileStmt() { this.adv(); return { k: "While", cond: this.expression(), body: this.block() }; }
+  forStmt() { const line = this.adv().line; const v = this.expect("NAME", "loop variable").value; this.expect("in", "'in'"); const it = this.expression(); return { k: "For", varName: v, iterable: it, body: this.block(), line }; }
+  returnStmt() { const line = this.adv().line; if (this.at("NL") || this.atOp("}") || this.at("EOF")) return { k: "Return", value: null, line }; return { k: "Return", value: this.expression(), line }; }
+
+  expression() { return this.logicOr(); }
+  logicOr() { let a = this.logicAnd(); while (this.at("or")) { this.adv(); a = { k: "Logic", op: "or", a, b: this.logicAnd() }; } return a; }
+  logicAnd() { let a = this.equality(); while (this.at("and")) { this.adv(); a = { k: "Logic", op: "and", a, b: this.equality() }; } return a; }
+  equality() { let a = this.comparison(); while (this.atOp("==") || this.atOp("!=")) { const t = this.adv(); a = { k: "Bin", op: t.value, a, b: this.comparison(), line: t.line }; } return a; }
+  comparison() { let a = this.term(); while (this.atOp("<") || this.atOp(">") || this.atOp("<=") || this.atOp(">=")) { const t = this.adv(); a = { k: "Bin", op: t.value, a, b: this.term(), line: t.line }; } return a; }
+  term() { let a = this.factor(); while (this.atOp("+") || this.atOp("-")) { const t = this.adv(); a = { k: "Bin", op: t.value, a, b: this.factor(), line: t.line }; } return a; }
+  factor() { let a = this.unary(); while (this.atOp("*") || this.atOp("/") || this.atOp("%")) { const t = this.adv(); a = { k: "Bin", op: t.value, a, b: this.unary(), line: t.line }; } return a; }
+  unary() { if (this.at("not")) { const t = this.adv(); return { k: "Unary", op: "not", node: this.unary(), line: t.line }; } if (this.atOp("-")) { const t = this.adv(); return { k: "Unary", op: "-", node: this.unary(), line: t.line }; } return this.postfix(); }
+  postfix() { let node = this.primary(); while (true) { if (this.atOp("(")) { const t = this.adv(); const args = []; if (!this.atOp(")")) { args.push(this.expression()); while (this.atOp(",")) { this.adv(); args.push(this.expression()); } } this.eatOp(")", "')'"); node = { k: "Call", callee: node, args, line: t.line }; } else if (this.atOp("[")) { const t = this.adv(); const idx = this.expression(); this.eatOp("]", "']'"); node = { k: "Index", target: node, index: idx, line: t.line }; } else break; } return node; }
+  primary() {
+    const t = this.peek();
+    if (t.type === "NUM") { this.adv(); return { k: "Num", v: t.value }; }
+    if (t.type === "STR") { this.adv(); return { k: "Str", v: t.value }; }
+    if (t.type === "hai") { this.adv(); return { k: "Bool", v: true }; }
+    if (t.type === "iie") { this.adv(); return { k: "Bool", v: false }; }
+    if (t.type === "mu") { this.adv(); return { k: "Null" }; }
+    if (t.type === "NAME") { this.adv(); return { k: "Name", name: t.value, line: t.line }; }
+    if (this.atOp("(")) { this.adv(); const e = this.expression(); this.eatOp(")", "')'"); return e; }
+    if (this.atOp("[")) { this.adv(); const items = []; if (!this.atOp("]")) { items.push(this.expression()); while (this.atOp(",")) { this.adv(); items.push(this.expression()); } } this.eatOp("]", "']'"); return { k: "ListLit", items }; }
+    throw new AmkError("unexpected " + (t.value !== null ? t.value : "end of file"), t.line);
+  }
+}
+
+function isNum(v) { return typeof v === "number"; }
+function truthy(v) {
+  if (v === null || v === false) return false;
+  if (v === true) return true;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") return v.length > 0;
+  if (Array.isArray(v)) return v.length > 0;
+  return true;
+}
+function toText(v) {
+  if (v === true) return "hai";
+  if (v === false) return "iie";
+  if (v === null || v === undefined) return "mu";
+  if (typeof v === "number") return String(v);
+  if (Array.isArray(v)) return "[" + v.map(toText).join(", ") + "]";
+  return String(v);
+}
+function typeName(v) {
+  if (v === true || v === false) return "bool";
+  if (v === null) return "mu";
+  if (typeof v === "number") return "number";
+  if (typeof v === "string") return "text";
+  if (Array.isArray(v)) return "list";
+  return "value";
+}
+function deepEq(a, b) {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!deepEq(a[i], b[i])) return false;
+    return true;
+  }
+  return a === b;
+}
+
+class ReturnSignal { constructor(value) { this.value = value; } }
+class AmkFunction { constructor(decl, env) { this.decl = decl; this.env = env; } }
+
+class Env {
+  constructor(parent = null) { this.vars = new Map(); this.parent = parent; }
+  get(name, line) { let e = this; while (e) { if (e.vars.has(name)) return e.vars.get(name); e = e.parent; } throw new AmkError("unknown name '" + name + "'", line); }
+  assign(name, value) { let e = this; while (e) { if (e.vars.has(name)) { e.vars.set(name, value); return; } e = e.parent; } this.vars.set(name, value); }
+  define(name, value) { this.vars.set(name, value); }
+}
+
+class Interp {
+  constructor(io) { this.io = io; this.globals = new Env(); this._installBuiltins(); }
+
+  async run(prog) {
+    for (const s of prog.stmts) {
+      try { await this.exec(s, this.globals); }
+      catch (e) { if (e instanceof ReturnSignal) throw new AmkError("'back' can only be used inside a function (tyan)"); throw e; }
+    }
+  }
+
+  async exec(node, env) {
+    switch (node.k) {
+      case "ExprS": await this.eval(node.expr, env); return;
+      case "Func": env.define(node.name, new AmkFunction(node, env)); return;
+      case "Assign": {
+        const val = await this.eval(node.value, env);
+        if (node.target.k === "Name") env.assign(node.target.name, val);
+        else { const target = await this.eval(node.target.target, env); const idx = await this.eval(node.target.index, env); this._setIndex(target, idx, val, node.line); }
+        return;
+      }
+      case "If": {
+        if (truthy(await this.eval(node.cond, env))) await this.execBlock(node.then, env);
+        else if (node.els) { if (node.els.k === "Block") await this.execBlock(node.els, env); else await this.exec(node.els, env); }
+        return;
+      }
+      case "While": {
+        let guard = 0;
+        while (truthy(await this.eval(node.cond, env))) { await this.execBlock(node.body, env); if (++guard > 10000000) throw new AmkError("loop ran too long (possible infinite loop)"); }
+        return;
+      }
+      case "For": {
+        const coll = await this.eval(node.iterable, env);
+        if (!Array.isArray(coll) && typeof coll !== "string") throw new AmkError("'for ... in ...' needs a list or text", node.line);
+        for (const item of coll) { env.assign(node.varName, item); await this.execBlock(node.body, env); }
+        return;
+      }
+      case "Return": { const val = node.value !== null ? await this.eval(node.value, env) : null; throw new ReturnSignal(val); }
+    }
+    throw new AmkError("cannot run node " + node.k);
+  }
+
+  async execBlock(block, env) { for (const s of block.stmts) await this.exec(s, env); }
+
+  async eval(node, env) {
+    switch (node.k) {
+      case "Num": return node.v;
+      case "Str": return node.v;
+      case "Bool": return node.v;
+      case "Null": return null;
+      case "ListLit": { const arr = []; for (const e of node.items) arr.push(await this.eval(e, env)); return arr; }
+      case "Name": return env.get(node.name, node.line);
+      case "Unary": {
+        const v = await this.eval(node.node, env);
+        if (node.op === "not") return !truthy(v);
+        if (!isNum(v)) throw new AmkError("minus works only on a number", node.line);
+        return -v;
+      }
+      case "Logic": {
+        const left = await this.eval(node.a, env);
+        if (node.op === "and") return truthy(left) ? truthy(await this.eval(node.b, env)) : false;
+        return truthy(left) ? true : truthy(await this.eval(node.b, env));
+      }
+      case "Bin": return await this._binop(node, env);
+      case "Index": { const target = await this.eval(node.target, env); const idx = await this.eval(node.index, env); return this._getIndex(target, idx, node.line); }
+      case "Call": {
+        const callee = await this.eval(node.callee, env);
+        const args = []; for (const a of node.args) args.push(await this.eval(a, env));
+        return await this.call(callee, args, node.line);
+      }
+    }
+    throw new AmkError("cannot evaluate " + node.k, node.line);
+  }
+
+  async _binop(node, env) {
+    const op = node.op, line = node.line;
+    const a = await this.eval(node.a, env), b = await this.eval(node.b, env);
+    const numck = () => { if (!(isNum(a) && isNum(b))) throw new AmkError("'" + op + "' needs two numbers, got " + typeName(a) + " and " + typeName(b), line); };
+    switch (op) {
+      case "+":
+        if (typeof a === "string" || typeof b === "string") return toText(a) + toText(b);
+        if (Array.isArray(a) && Array.isArray(b)) return a.concat(b);
+        numck(); return a + b;
+      case "-": numck(); return a - b;
+      case "*":
+        if (typeof a === "string" && Number.isInteger(b)) return a.repeat(Math.max(0, b));
+        if (typeof b === "string" && Number.isInteger(a)) return b.repeat(Math.max(0, a));
+        numck(); return a * b;
+      case "/": numck(); if (b === 0) throw new AmkError("division by zero", line); return a / b;
+      case "%": numck(); if (b === 0) throw new AmkError("division by zero", line); return a % b;
+      case "==": return deepEq(a, b);
+      case "!=": return !deepEq(a, b);
+      default: {
+        const ok = (isNum(a) && isNum(b)) || (typeof a === "string" && typeof b === "string");
+        if (!ok) throw new AmkError("cannot compare " + typeName(a) + " and " + typeName(b), line);
+        if (op === "<") return a < b;
+        if (op === ">") return a > b;
+        if (op === "<=") return a <= b;
+        return a >= b;
+      }
+    }
+  }
+
+  async call(callee, args, line) {
+    if (callee instanceof AmkFunction) {
+      const decl = callee.decl;
+      if (args.length !== decl.params.length) throw new AmkError("function '" + decl.name + "' wants " + decl.params.length + " argument(s), got " + args.length, line);
+      const local = new Env(callee.env);
+      for (let i = 0; i < decl.params.length; i++) local.define(decl.params[i], args[i]);
+      try { await this.execBlock(decl.body, local); }
+      catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+      return null;
+    }
+    if (typeof callee === "function") return await callee(...args);
+    throw new AmkError("this is not a function, cannot call it with ()", line);
+  }
+
+  _getIndex(target, idx, line) {
+    if (Array.isArray(target) || typeof target === "string") {
+      if (!Number.isInteger(idx)) throw new AmkError("index must be a whole number", line);
+      let i = idx; if (i < 0) i += target.length;
+      if (i < 0 || i >= target.length) throw new AmkError("index " + idx + " is out of range", line);
+      return target[i];
+    }
+    throw new AmkError("only a list or text can be indexed", line);
+  }
+  _setIndex(target, idx, val, line) {
+    if (Array.isArray(target)) {
+      if (!Number.isInteger(idx)) throw new AmkError("index must be a whole number", line);
+      let i = idx; if (i < 0) i += target.length;
+      if (i < 0 || i >= target.length) throw new AmkError("index " + idx + " is out of range", line);
+      target[i] = val; return;
+    }
+    throw new AmkError("only a list can be changed by index", line);
+  }
+
+  _installBuiltins() {
+    const io = this.io, g = this.globals;
+    g.define("nya", (...a) => { io.output(a.map(toText).join(" ") + "\n"); return null; });
+    g.define("len", (x) => { if (Array.isArray(x) || typeof x === "string") return x.length; throw new AmkError("len() needs a list or text"); });
+    g.define("num", (x) => {
+      if (typeof x === "number") return x;
+      if (typeof x === "boolean") return x ? 1 : 0;
+      if (typeof x === "string") { const s = x.trim(); const v = s.includes(".") ? parseFloat(s) : parseInt(s, 10); if (Number.isNaN(v)) throw new AmkError("cannot turn '" + x + "' into a number"); return v; }
+      throw new AmkError("num() does not understand this value");
+    });
+    g.define("str", (x) => toText(x));
+    g.define("range", (a, b, step) => {
+      a = Math.trunc(a);
+      if (b === undefined) { b = a; a = 0; }
+      b = Math.trunc(b); step = step === undefined ? 1 : Math.trunc(step);
+      if (step === 0) throw new AmkError("range step cannot be 0");
+      const out = [];
+      if (step > 0) for (let i = a; i < b; i += step) { out.push(i); if (out.length > 5000000) throw new AmkError("range too big"); }
+      else for (let i = a; i > b; i += step) { out.push(i); if (out.length > 5000000) throw new AmkError("range too big"); }
+      return out;
+    });
+    g.define("push", (lst, v) => { if (!Array.isArray(lst)) throw new AmkError("push() needs a list"); lst.push(v); return null; });
+    g.define("ask", async (prompt) => { const p = prompt === undefined ? "" : toText(prompt); const line = await io.input(p); return (line === undefined || line === null) ? "" : String(line); });
+
+    // random(a, b) -> случайное целое от a до b включительно
+    g.define("random", (a, b) => {
+      a = Math.trunc(a); b = Math.trunc(b);
+      if (b < a) { const t = a; a = b; b = t; }
+      return a + Math.floor(Math.random() * (b - a + 1));
+    });
+
+    // --- рисование (доступно там, где есть холст: io.gfx) ---
+    const gfx = io.gfx;
+    if (gfx) {
+      g.define("clear", () => { gfx.clear(); return null; });
+      g.define("background", (a, b, c) => { gfx.background(a, b, c); return null; });
+      g.define("color", (a, b, c) => { gfx.color(a, b, c); return null; });
+      g.define("rect", (x, y, w, h) => { gfx.rect(x, y, w, h); return null; });
+      g.define("circle", (x, y, r) => { gfx.circle(x, y, r); return null; });
+      g.define("line", (x1, y1, x2, y2) => { gfx.line(x1, y1, x2, y2); return null; });
+      g.define("dot", (x, y) => { gfx.circle(x, y, 3); return null; });
+      g.define("text", (x, y, s) => { gfx.text(x, y, toText(s)); return null; });
+      g.define("width", () => gfx.width());
+      g.define("height", () => gfx.height());
+    }
+  }
+}
+
+async function run(code, io) {
+  try {
+    const prog = new Parser(lex(code)).parse();
+    await new Interp(io).run(prog);
+  } catch (e) {
+    if (e && e.amk) io.output("\namkawa error: " + e.toString() + "\n");
+    else io.output("\ninternal error: " + (e && e.message ? e.message : String(e)) + "\n");
+  }
+}
+
+module.exports = { run, lex, Parser, Interp, AmkError };
+
+// --- Node CLI for testing:  node amkawa.js file.amkawa ---
+if (require.main === module) {
+  const fs = require("fs");
+  const readline = require("readline");
+  const path = process.argv[2];
+  if (!path) { console.error("usage: node amkawa.js file.amkawa"); process.exit(1); }
+  const code = fs.readFileSync(path, "utf8");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
+  const pending = []; let waiting = null;
+  rl.on("line", (l) => { if (waiting) { const w = waiting; waiting = null; w(l); } else pending.push(l); });
+  const io = {
+    output: (s) => process.stdout.write(s),
+    input: (prompt) => { process.stdout.write(prompt); return new Promise((res) => { if (pending.length) res(pending.shift()); else waiting = res; }); },
+  };
+  run(code, io).then(() => rl.close());
+}
