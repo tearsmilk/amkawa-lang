@@ -1,0 +1,112 @@
+# ==========================================
+#   Калькулятор с кнопками ~ sugoi
+#   тыкай по кнопкам мышкой
+# ==========================================
+
+# раскладка кнопок 4x4
+labels = [
+  ["7", "8", "9", "/"],
+  ["4", "5", "6", "*"],
+  ["1", "2", "3", "-"],
+  ["0", "C", "=", "+"]
+]
+
+# состояние
+acc = 0        # накопленное число
+cur = ""       # что набираешь сейчас
+op = mu        # ожидающая операция
+
+tyan is_op(s) {
+  moshi s == "+" or s == "-" or s == "*" or s == "/" {
+    back hai
+  }
+  back iie
+}
+
+tyan compute(a, o, b) {
+  moshi o == "+" { back a + b }
+  moshi o == "-" { back a - b }
+  moshi o == "*" { back a * b }
+  moshi o == "/" {
+    moshi b == 0 { back 0 }
+    back a / b
+  }
+  back b
+}
+
+tyan render() {
+  background("#0e0d11")
+
+  # экран
+  color("#17151d")
+  rect(20, 20, 480, 60)
+  shown = cur
+  moshi cur == "" { shown = str(acc) }
+  color("#ff9ec7")
+  font(30)
+  text(36, 62, shown)
+
+  # кнопки
+  font(22)
+  for r in range(0, 4) {
+    for c in range(0, 4) {
+      bx = 20 + c * 124
+      by = 100 + r * 64
+      lbl = labels[r][c]
+
+      moshi is_op(lbl) or lbl == "=" {
+        color("#24303b")
+      } else moshi lbl == "C" {
+        color("#3a2028")
+      } else {
+        color("#1d1b22")
+      }
+      rect(bx, by, 116, 54)
+
+      color("#ece9f0")
+      text(bx + 48, by + 36, lbl)
+    }
+  }
+}
+
+tyan press(label) {
+  moshi label == "C" {
+    acc = 0
+    cur = ""
+    op = mu
+  } else moshi label == "=" {
+    moshi op != mu {
+      acc = compute(acc, op, num(cur))
+      cur = str(acc)
+      op = mu
+    }
+  } else moshi is_op(label) {
+    moshi cur != "" {
+      moshi op == mu {
+        acc = num(cur)
+      } else {
+        acc = compute(acc, op, num(cur))
+      }
+      cur = ""
+    }
+    op = label
+  } else {
+    cur = cur + label
+  }
+  render()
+}
+
+tyan handle_click(x, y) {
+  for r in range(0, 4) {
+    for c in range(0, 4) {
+      bx = 20 + c * 124
+      by = 100 + r * 64
+      moshi x >= bx and x <= bx + 116 and y >= by and y <= by + 54 {
+        press(labels[r][c])
+      }
+    }
+  }
+}
+
+render()
+on_click(handle_click)

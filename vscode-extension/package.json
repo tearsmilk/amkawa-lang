@@ -1,0 +1,30 @@
+{
+  "name": "aminakawa",
+  "displayName": "Aminakawa (.amkawa)",
+  "description": "Anime-flavored toy language. Open a .amkawa file and press Run — no Python, no setup.",
+  "version": "0.2.0",
+  "publisher": "tearsmilk",
+  "engines": { "vscode": "^1.70.0" },
+  "categories": ["Programming Languages"],
+  "main": "./extension.js",
+  "activationEvents": ["onLanguage:amkawa"],
+  "contributes": {
+    "languages": [
+      { "id": "amkawa", "aliases": ["Aminakawa", "amkawa"], "extensions": [".amkawa"], "configuration": "./language-configuration.json" }
+    ],
+    "grammars": [
+      { "language": "amkawa", "scopeName": "source.amkawa", "path": "./syntaxes/amkawa.tmLanguage.json" }
+    ],
+    "commands": [
+      { "command": "aminakawa.run", "title": "Aminakawa: Запустить файл", "icon": "$(play)" }
+    ],
+    "keybindings": [
+      { "command": "aminakawa.run", "key": "ctrl+f5", "when": "editorLangId == amkawa" }
+    ],
+    "menus": {
+      "editor/title/run": [
+        { "command": "aminakawa.run", "when": "editorLangId == amkawa", "group": "navigation" }
+      ]
+    }
+  }
+}

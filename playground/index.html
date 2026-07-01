@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aminakawa · playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e0d11; --panel:#151319; --line:rgba(255,255,255,.09);
+    --text:#ece9f0; --muted:#9a96a6; --pink:#ff9ec7; --blue:#7cc7ff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);
+       display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;align-items:center;justify-content:space-between;
+         padding:12px 18px;border-bottom:1px solid var(--line);flex-shrink:0}
+  .brand{font-family:'Unbounded',sans-serif;font-size:1.05rem}
+  .brand .amk{color:var(--pink)}
+  .brand .sub{color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:.72rem;
+              letter-spacing:.15em;text-transform:uppercase;margin-left:10px}
+  #run{display:inline-flex;align-items:center;gap:8px;background:var(--pink);color:#1a0b12;
+       border:none;border-radius:999px;padding:9px 22px;font-family:'JetBrains Mono',monospace;
+       font-weight:700;font-size:.9rem;cursor:pointer;transition:transform .15s ease,box-shadow .2s ease}
+  #run:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(255,158,199,.3)}
+  #run:disabled{opacity:.5;cursor:default;transform:none;box-shadow:none}
+  #run .hot{color:#6b2a3f;font-size:.72rem;font-weight:500}
+  main{flex:1;display:flex;min-height:0}
+  .left,.right{flex:1;min-width:0;display:flex;flex-direction:column}
+  .left{border-right:1px solid var(--line)}
+  .bar{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+       padding:8px 16px;border-bottom:1px solid var(--line);flex-shrink:0}
+  #code{flex:1;width:100%;background:var(--bg);color:var(--text);border:none;outline:none;
+        resize:none;padding:16px;font-family:'JetBrains Mono',monospace;font-size:.92rem;
+        line-height:1.6;caret-color:var(--pink);tab-size:2}
+  .canvas-wrap{padding:16px;border-bottom:1px solid var(--line);
+               display:flex;align-items:center;justify-content:center;background:#0a0a0d}
+  #canvas{background:#0e0d11;border:1px solid var(--line);border-radius:8px;max-width:100%;height:auto}
+  #console{flex:1;overflow:auto;padding:14px 16px;white-space:pre-wrap;font-size:.86rem;
+           line-height:1.55;color:#cfe8d6;background:var(--panel)}
+  #console:empty::before{content:"тут появится вывод nya(...)";color:var(--muted)}
+  @media(max-width:820px){
+    main{flex-direction:column}
+    .left{border-right:none;border-bottom:1px solid var(--line)}
+    #code{min-height:200px}
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="amk">Aminakawa</span><span class="sub">playground</span></div>
+    <button id="run">▶ Run <span class="hot">Ctrl+Enter</span></button>
+  </header>
+  <main>
+    <div class="left">
+      <div class="bar">код · .amkawa</div>
+      <textarea id="code" spellcheck="false">
+# ==========================================
+#   Калькулятор с кнопками ~ sugoi
+#   тыкай по кнопкам мышкой
+# ==========================================
+
+# раскладка кнопок 4x4
+labels = [
+  ["7", "8", "9", "/"],
+  ["4", "5", "6", "*"],
+  ["1", "2", "3", "-"],
+  ["0", "C", "=", "+"]
+]
+
+# состояние
+acc = 0        # накопленное число
+cur = ""       # что набираешь сейчас
+op = mu        # ожидающая операция
+
+tyan is_op(s) {
+  moshi s == "+" or s == "-" or s == "*" or s == "/" {
+    back hai
+  }
+  back iie
+}
+
+tyan compute(a, o, b) {
+  moshi o == "+" { back a + b }
+  moshi o == "-" { back a - b }
+  moshi o == "*" { back a * b }
+  moshi o == "/" {
+    moshi b == 0 { back 0 }
+    back a / b
+  }
+  back b
+}
+
+tyan render() {
+  background("#0e0d11")
+
+  # экран
+  color("#17151d")
+  rect(20, 20, 480, 60)
+  shown = cur
+  moshi cur == "" { shown = str(acc) }
+  color("#ff9ec7")
+  font(30)
+  text(36, 62, shown)
+
+  # кнопки
+  font(22)
+  for r in range(0, 4) {
+    for c in range(0, 4) {
+      bx = 20 + c * 124
+      by = 100 + r * 64
+      lbl = labels[r][c]
+
+      moshi is_op(lbl) or lbl == "=" {
+        color("#24303b")
+      } else moshi lbl == "C" {
+        color("#3a2028")
+      } else {
+        color("#1d1b22")
+      }
+      rect(bx, by, 116, 54)
+
+      color("#ece9f0")
+      text(bx + 48, by + 36, lbl)
+    }
+  }
+}
+
+tyan press(label) {
+  moshi label == "C" {
+    acc = 0
+    cur = ""
+    op = mu
+  } else moshi label == "=" {
+    moshi op != mu {
+      acc = compute(acc, op, num(cur))
+      cur = str(acc)
+      op = mu
+    }
+  } else moshi is_op(label) {
+    moshi cur != "" {
+      moshi op == mu {
+        acc = num(cur)
+      } else {
+        acc = compute(acc, op, num(cur))
+      }
+      cur = ""
+    }
+    op = label
+  } else {
+    cur = cur + label
+  }
+  render()
+}
+
+tyan handle_click(x, y) {
+  for r in range(0, 4) {
+    for c in range(0, 4) {
+      bx = 20 + c * 124
+      by = 100 + r * 64
+      moshi x &gt;= bx and x &lt;= bx + 116 and y &gt;= by and y &lt;= by + 54 {
+        press(labels[r][c])
+      }
+    }
+  }
+}
+
+render()
+on_click(handle_click)
+</textarea>
+    </div>
+    <div class="right">
+      <div class="bar">холст</div>
+      <div class="canvas-wrap"><canvas id="canvas" width="520" height="380"></canvas></div>
+      <div class="bar">консоль</div>
+      <pre id="console"></pre>
+    </div>
+  </main>
+<script>
+"use strict";
+/*
+ * Aminakawa interpreter — JavaScript port.
+ * Runs .amkawa files with no external runtime (VSCode already has Node).
+ * Exports: run(code, io) where io = { output(str), input(prompt)->Promise<string> }.
+ * Also usable from Node for testing:  node amkawa.js file.amkawa
+ */
+
+class AmkError extends Error {
+  constructor(msg, line = null) { super(msg); this.amk = true; this.line = line; }
+  toString() { return this.line ? ("line " + this.line + ": " + this.message) : this.message; }
+}
+
+const KEYWORDS = new Set(["tyan", "back", "moshi", "else", "while", "for", "in", "and", "or", "not", "hai", "iie", "mu"]);
+const ID_START = /[_\p{L}]/u;
+const ID_CONT = /[_\p{L}\p{N}]/u;
+const DIGIT = /[0-9]/;
+
+function lex(src) {
+  const toks = []; let i = 0; const n = src.length; let line = 1;
+  const push = (t, v) => toks.push({ type: t, value: v, line });
+  while (i < n) {
+    const c = src[i];
+    if (c === "\n") { push("NL", "\n"); line++; i++; continue; }
+    if (c === " " || c === "\t" || c === "\r") { i++; continue; }
+    if (c === "#") { while (i < n && src[i] !== "\n") i++; continue; }
+    if (c === '"' || c === "'") {
+      const q = c; i++; let buf = "";
+      while (i < n && src[i] !== q) {
+        let ch = src[i];
+        if (ch === "\\" && i + 1 < n) {
+          const nx = src[i + 1];
+          const map = { n: "\n", t: "\t", "\\": "\\", '"': '"', "'": "'" };
+          buf += (map[nx] !== undefined ? map[nx] : nx); i += 2; continue;
+        }
+        if (ch === "\n") line++;
+        buf += ch; i++;
+      }
+      if (i >= n) throw new AmkError("string is missing a closing quote", line);
+      i++; push("STR", buf); continue;
+    }
+    if (DIGIT.test(c) || (c === "." && i + 1 < n && DIGIT.test(src[i + 1]))) {
+      let start = i, dot = false;
+      while (i < n && (DIGIT.test(src[i]) || src[i] === ".")) {
+        if (src[i] === ".") { if (dot) break; dot = true; }
+        i++;
+      }
+      push("NUM", parseFloat(src.slice(start, i))); continue;
+    }
+    if (ID_START.test(c)) {
+      let start = i;
+      while (i < n && ID_CONT.test(src[i])) i++;
+      const w = src.slice(start, i);
+      push(KEYWORDS.has(w) ? w : "NAME", w); continue;
+    }
+    const two = src.slice(i, i + 2);
+    if (two === "==" || two === "!=" || two === "<=" || two === ">=") { push("OP", two); i += 2; continue; }
+    if ("+-*/%()<>{}[],=".includes(c)) { push("OP", c); i++; continue; }
+    throw new AmkError("unexpected character '" + c + "'", line);
+  }
+  push("EOF", null);
+  return toks;
+}
+
+class Parser {
+  constructor(toks) { this.toks = toks; this.i = 0; }
+  peek() { return this.toks[this.i]; }
+  adv() { return this.toks[this.i++]; }
+  at(...types) { return types.includes(this.peek().type); }
+  atOp(v) { const t = this.peek(); return t.type === "OP" && t.value === v; }
+  eatOp(v, what) { if (!this.atOp(v)) throw new AmkError("expected " + (what || ("'" + v + "'")), this.peek().line); return this.adv(); }
+  expect(type, what) { if (this.peek().type !== type) throw new AmkError("expected " + (what || type), this.peek().line); return this.adv(); }
+  skipNL() { while (this.at("NL")) this.adv(); }
+
+  parse() { const stmts = []; this.skipNL(); while (!this.at("EOF")) { stmts.push(this.statement()); this.skipNL(); } return { k: "Program", stmts }; }
+
+  statement() {
+    const t = this.peek();
+    if (t.type === "tyan") return this.funcdef();
+    if (t.type === "moshi") return this.ifStmt();
+    if (t.type === "while") return this.whileStmt();
+    if (t.type === "for") return this.forStmt();
+    if (t.type === "back") return this.returnStmt();
+    const expr = this.expression();
+    if (this.atOp("=")) {
+      const line = this.adv().line;
+      const value = this.expression();
+      if (expr.k !== "Name" && expr.k !== "Index") throw new AmkError("left of '=' must be a variable name", line);
+      return { k: "Assign", target: expr, value, line };
+    }
+    return { k: "ExprS", expr };
+  }
+  block() { this.eatOp("{", "'{'"); const stmts = []; this.skipNL(); while (!this.atOp("}") && !this.at("EOF")) { stmts.push(this.statement()); this.skipNL(); } this.eatOp("}", "'}'"); return { k: "Block", stmts }; }
+  funcdef() { const line = this.adv().line; const name = this.expect("NAME", "function name").value; this.eatOp("(", "'('"); const params = []; if (!this.atOp(")")) { params.push(this.expect("NAME", "parameter name").value); while (this.atOp(",")) { this.adv(); params.push(this.expect("NAME", "parameter name").value); } } this.eatOp(")", "')'"); return { k: "Func", name, params, body: this.block(), line }; }
+  ifStmt() { this.adv(); const cond = this.expression(); const then = this.block(); let els = null; this.skipNL(); if (this.at("else")) { this.adv(); this.skipNL(); els = this.at("moshi") ? this.ifStmt() : this.block(); } return { k: "If", cond, then, els }; }
+  whileStmt() { this.adv(); return { k: "While", cond: this.expression(), body: this.block() }; }
+  forStmt() { const line = this.adv().line; const v = this.expect("NAME", "loop variable").value; this.expect("in", "'in'"); const it = this.expression(); return { k: "For", varName: v, iterable: it, body: this.block(), line }; }
+  returnStmt() { const line = this.adv().line; if (this.at("NL") || this.atOp("}") || this.at("EOF")) return { k: "Return", value: null, line }; return { k: "Return", value: this.expression(), line }; }
+
+  expression() { return this.logicOr(); }
+  logicOr() { let a = this.logicAnd(); while (this.at("or")) { this.adv(); a = { k: "Logic", op: "or", a, b: this.logicAnd() }; } return a; }
+  logicAnd() { let a = this.equality(); while (this.at("and")) { this.adv(); a = { k: "Logic", op: "and", a, b: this.equality() }; } return a; }
+  equality() { let a = this.comparison(); while (this.atOp("==") || this.atOp("!=")) { const t = this.adv(); a = { k: "Bin", op: t.value, a, b: this.comparison(), line: t.line }; } return a; }
+  comparison() { let a = this.term(); while (this.atOp("<") || this.atOp(">") || this.atOp("<=") || this.atOp(">=")) { const t = this.adv(); a = { k: "Bin", op: t.value, a, b: this.term(), line: t.line }; } return a; }
+  term() { let a = this.factor(); while (this.atOp("+") || this.atOp("-")) { const t = this.adv(); a = { k: "Bin", op: t.value, a, b: this.factor(), line: t.line }; } return a; }
+  factor() { let a = this.unary(); while (this.atOp("*") || this.atOp("/") || this.atOp("%")) { const t = this.adv(); a = { k: "Bin", op: t.value, a, b: this.unary(), line: t.line }; } return a; }
+  unary() { if (this.at("not")) { const t = this.adv(); return { k: "Unary", op: "not", node: this.unary(), line: t.line }; } if (this.atOp("-")) { const t = this.adv(); return { k: "Unary", op: "-", node: this.unary(), line: t.line }; } return this.postfix(); }
+  postfix() { let node = this.primary(); while (true) { if (this.atOp("(")) { const t = this.adv(); this.skipNL(); const args = []; if (!this.atOp(")")) { args.push(this.expression()); this.skipNL(); while (this.atOp(",")) { this.adv(); this.skipNL(); if (this.atOp(")")) break; args.push(this.expression()); this.skipNL(); } } this.eatOp(")", "')'"); node = { k: "Call", callee: node, args, line: t.line }; } else if (this.atOp("[")) { const t = this.adv(); const idx = this.expression(); this.eatOp("]", "']'"); node = { k: "Index", target: node, index: idx, line: t.line }; } else break; } return node; }
+  primary() {
+    const t = this.peek();
+    if (t.type === "NUM") { this.adv(); return { k: "Num", v: t.value }; }
+    if (t.type === "STR") { this.adv(); return { k: "Str", v: t.value }; }
+    if (t.type === "hai") { this.adv(); return { k: "Bool", v: true }; }
+    if (t.type === "iie") { this.adv(); return { k: "Bool", v: false }; }
+    if (t.type === "mu") { this.adv(); return { k: "Null" }; }
+    if (t.type === "NAME") { this.adv(); return { k: "Name", name: t.value, line: t.line }; }
+    if (this.atOp("(")) { this.adv(); this.skipNL(); const e = this.expression(); this.skipNL(); this.eatOp(")", "')'"); return e; }
+    if (this.atOp("[")) { this.adv(); this.skipNL(); const items = []; if (!this.atOp("]")) { items.push(this.expression()); this.skipNL(); while (this.atOp(",")) { this.adv(); this.skipNL(); if (this.atOp("]")) break; items.push(this.expression()); this.skipNL(); } } this.eatOp("]", "']'"); return { k: "ListLit", items }; }
+    throw new AmkError("unexpected " + (t.value !== null ? t.value : "end of file"), t.line);
+  }
+}
+
+function isNum(v) { return typeof v === "number"; }
+function truthy(v) {
+  if (v === null || v === false) return false;
+  if (v === true) return true;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") return v.length > 0;
+  if (Array.isArray(v)) return v.length > 0;
+  return true;
+}
+function toText(v) {
+  if (v === true) return "hai";
+  if (v === false) return "iie";
+  if (v === null || v === undefined) return "mu";
+  if (typeof v === "number") return String(v);
+  if (Array.isArray(v)) return "[" + v.map(toText).join(", ") + "]";
+  return String(v);
+}
+function typeName(v) {
+  if (v === true || v === false) return "bool";
+  if (v === null) return "mu";
+  if (typeof v === "number") return "number";
+  if (typeof v === "string") return "text";
+  if (Array.isArray(v)) return "list";
+  return "value";
+}
+function deepEq(a, b) {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!deepEq(a[i], b[i])) return false;
+    return true;
+  }
+  return a === b;
+}
+
+class ReturnSignal { constructor(value) { this.value = value; } }
+class AmkFunction { constructor(decl, env) { this.decl = decl; this.env = env; } }
+
+class Env {
+  constructor(parent = null) { this.vars = new Map(); this.parent = parent; }
+  get(name, line) { let e = this; while (e) { if (e.vars.has(name)) return e.vars.get(name); e = e.parent; } throw new AmkError("unknown name '" + name + "'", line); }
+  assign(name, value) { let e = this; while (e) { if (e.vars.has(name)) { e.vars.set(name, value); return; } e = e.parent; } this.vars.set(name, value); }
+  define(name, value) { this.vars.set(name, value); }
+}
+
+class Interp {
+  constructor(io) { this.io = io; this.globals = new Env(); this._installBuiltins(); }
+
+  async run(prog) {
+    for (const s of prog.stmts) {
+      try { await this.exec(s, this.globals); }
+      catch (e) { if (e instanceof ReturnSignal) throw new AmkError("'back' can only be used inside a function (tyan)"); throw e; }
+    }
+  }
+
+  async exec(node, env) {
+    switch (node.k) {
+      case "ExprS": await this.eval(node.expr, env); return;
+      case "Func": env.define(node.name, new AmkFunction(node, env)); return;
+      case "Assign": {
+        const val = await this.eval(node.value, env);
+        if (node.target.k === "Name") env.assign(node.target.name, val);
+        else { const target = await this.eval(node.target.target, env); const idx = await this.eval(node.target.index, env); this._setIndex(target, idx, val, node.line); }
+        return;
+      }
+      case "If": {
+        if (truthy(await this.eval(node.cond, env))) await this.execBlock(node.then, env);
+        else if (node.els) { if (node.els.k === "Block") await this.execBlock(node.els, env); else await this.exec(node.els, env); }
+        return;
+      }
+      case "While": {
+        let guard = 0;
+        while (truthy(await this.eval(node.cond, env))) { await this.execBlock(node.body, env); if (++guard > 10000000) throw new AmkError("loop ran too long (possible infinite loop)"); }
+        return;
+      }
+      case "For": {
+        const coll = await this.eval(node.iterable, env);
+        if (!Array.isArray(coll) && typeof coll !== "string") throw new AmkError("'for ... in ...' needs a list or text", node.line);
+        for (const item of coll) { env.assign(node.varName, item); await this.execBlock(node.body, env); }
+        return;
+      }
+      case "Return": { const val = node.value !== null ? await this.eval(node.value, env) : null; throw new ReturnSignal(val); }
+    }
+    throw new AmkError("cannot run node " + node.k);
+  }
+
+  async execBlock(block, env) { for (const s of block.stmts) await this.exec(s, env); }
+
+  async eval(node, env) {
+    switch (node.k) {
+      case "Num": return node.v;
+      case "Str": return node.v;
+      case "Bool": return node.v;
+      case "Null": return null;
+      case "ListLit": { const arr = []; for (const e of node.items) arr.push(await this.eval(e, env)); return arr; }
+      case "Name": return env.get(node.name, node.line);
+      case "Unary": {
+        const v = await this.eval(node.node, env);
+        if (node.op === "not") return !truthy(v);
+        if (!isNum(v)) throw new AmkError("minus works only on a number", node.line);
+        return -v;
+      }
+      case "Logic": {
+        const left = await this.eval(node.a, env);
+        if (node.op === "and") return truthy(left) ? truthy(await this.eval(node.b, env)) : false;
+        return truthy(left) ? true : truthy(await this.eval(node.b, env));
+      }
+      case "Bin": return await this._binop(node, env);
+      case "Index": { const target = await this.eval(node.target, env); const idx = await this.eval(node.index, env); return this._getIndex(target, idx, node.line); }
+      case "Call": {
+        const callee = await this.eval(node.callee, env);
+        const args = []; for (const a of node.args) args.push(await this.eval(a, env));
+        return await this.call(callee, args, node.line);
+      }
+    }
+    throw new AmkError("cannot evaluate " + node.k, node.line);
+  }
+
+  async _binop(node, env) {
+    const op = node.op, line = node.line;
+    const a = await this.eval(node.a, env), b = await this.eval(node.b, env);
+    const numck = () => { if (!(isNum(a) && isNum(b))) throw new AmkError("'" + op + "' needs two numbers, got " + typeName(a) + " and " + typeName(b), line); };
+    switch (op) {
+      case "+":
+        if (typeof a === "string" || typeof b === "string") return toText(a) + toText(b);
+        if (Array.isArray(a) && Array.isArray(b)) return a.concat(b);
+        numck(); return a + b;
+      case "-": numck(); return a - b;
+      case "*":
+        if (typeof a === "string" && Number.isInteger(b)) return a.repeat(Math.max(0, b));
+        if (typeof b === "string" && Number.isInteger(a)) return b.repeat(Math.max(0, a));
+        numck(); return a * b;
+      case "/": numck(); if (b === 0) throw new AmkError("division by zero", line); return a / b;
+      case "%": numck(); if (b === 0) throw new AmkError("division by zero", line); return a % b;
+      case "==": return deepEq(a, b);
+      case "!=": return !deepEq(a, b);
+      default: {
+        const ok = (isNum(a) && isNum(b)) || (typeof a === "string" && typeof b === "string");
+        if (!ok) throw new AmkError("cannot compare " + typeName(a) + " and " + typeName(b), line);
+        if (op === "<") return a < b;
+        if (op === ">") return a > b;
+        if (op === "<=") return a <= b;
+        return a >= b;
+      }
+    }
+  }
+
+  async call(callee, args, line) {
+    if (callee instanceof AmkFunction) {
+      const decl = callee.decl;
+      if (args.length !== decl.params.length) throw new AmkError("function '" + decl.name + "' wants " + decl.params.length + " argument(s), got " + args.length, line);
+      const local = new Env(callee.env);
+      for (let i = 0; i < decl.params.length; i++) local.define(decl.params[i], args[i]);
+      try { await this.execBlock(decl.body, local); }
+      catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+      return null;
+    }
+    if (typeof callee === "function") return await callee(...args);
+    throw new AmkError("this is not a function, cannot call it with ()", line);
+  }
+
+  _getIndex(target, idx, line) {
+    if (Array.isArray(target) || typeof target === "string") {
+      if (!Number.isInteger(idx)) throw new AmkError("index must be a whole number", line);
+      let i = idx; if (i < 0) i += target.length;
+      if (i < 0 || i >= target.length) throw new AmkError("index " + idx + " is out of range", line);
+      return target[i];
+    }
+    throw new AmkError("only a list or text can be indexed", line);
+  }
+  _setIndex(target, idx, val, line) {
+    if (Array.isArray(target)) {
+      if (!Number.isInteger(idx)) throw new AmkError("index must be a whole number", line);
+      let i = idx; if (i < 0) i += target.length;
+      if (i < 0 || i >= target.length) throw new AmkError("index " + idx + " is out of range", line);
+      target[i] = val; return;
+    }
+    throw new AmkError("only a list can be changed by index", line);
+  }
+
+  _installBuiltins() {
+    const io = this.io, g = this.globals;
+    const interp = this;
+    g.define("nya", (...a) => { io.output(a.map(toText).join(" ") + "\n"); return null; });
+    g.define("len", (x) => { if (Array.isArray(x) || typeof x === "string") return x.length; throw new AmkError("len() needs a list or text"); });
+    g.define("num", (x) => {
+      if (typeof x === "number") return x;
+      if (typeof x === "boolean") return x ? 1 : 0;
+      if (typeof x === "string") { const s = x.trim(); const v = s.includes(".") ? parseFloat(s) : parseInt(s, 10); if (Number.isNaN(v)) throw new AmkError("cannot turn '" + x + "' into a number"); return v; }
+      throw new AmkError("num() does not understand this value");
+    });
+    g.define("str", (x) => toText(x));
+    g.define("range", (a, b, step) => {
+      a = Math.trunc(a);
+      if (b === undefined) { b = a; a = 0; }
+      b = Math.trunc(b); step = step === undefined ? 1 : Math.trunc(step);
+      if (step === 0) throw new AmkError("range step cannot be 0");
+      const out = [];
+      if (step > 0) for (let i = a; i < b; i += step) { out.push(i); if (out.length > 5000000) throw new AmkError("range too big"); }
+      else for (let i = a; i > b; i += step) { out.push(i); if (out.length > 5000000) throw new AmkError("range too big"); }
+      return out;
+    });
+    g.define("push", (lst, v) => { if (!Array.isArray(lst)) throw new AmkError("push() needs a list"); lst.push(v); return null; });
+    g.define("ask", async (prompt) => { const p = prompt === undefined ? "" : toText(prompt); const line = await io.input(p); return (line === undefined || line === null) ? "" : String(line); });
+
+    // random(a, b) -> случайное целое от a до b включительно
+    g.define("random", (a, b) => {
+      a = Math.trunc(a); b = Math.trunc(b);
+      if (b < a) { const t = a; a = b; b = t; }
+      return a + Math.floor(Math.random() * (b - a + 1));
+    });
+
+    // --- рисование (доступно там, где есть холст: io.gfx) ---
+    const gfx = io.gfx;
+    if (gfx) {
+      g.define("clear", () => { gfx.clear(); return null; });
+      g.define("background", (a, b, c) => { gfx.background(a, b, c); return null; });
+      g.define("color", (a, b, c) => { gfx.color(a, b, c); return null; });
+      g.define("rect", (x, y, w, h) => { gfx.rect(x, y, w, h); return null; });
+      g.define("circle", (x, y, r) => { gfx.circle(x, y, r); return null; });
+      g.define("line", (x1, y1, x2, y2) => { gfx.line(x1, y1, x2, y2); return null; });
+      g.define("dot", (x, y) => { gfx.circle(x, y, 3); return null; });
+      g.define("text", (x, y, s) => { gfx.text(x, y, toText(s)); return null; });
+      g.define("width", () => gfx.width());
+      g.define("height", () => gfx.height());
+      g.define("font", (px) => { gfx.font(px); return null; });
+    }
+
+    // on_click(func) — вызывает func(x, y) при клике по холсту
+    g.define("on_click", (fn) => {
+      if (!io.onClick) return null;
+      io.onClick((x, y) => interp.call(fn, [x, y], null));
+      return null;
+    });
+  }
+}
+
+async function run(code, io) {
+  try {
+    const prog = new Parser(lex(code)).parse();
+    await new Interp(io).run(prog);
+  } catch (e) {
+    if (e && e.amk) io.output("\namkawa error: " + e.toString() + "\n");
+    else io.output("\ninternal error: " + (e && e.message ? e.message : String(e)) + "\n");
+  }
+}
+
+</script>
+<script>
+(function(){
+  const editor = document.getElementById("code");
+  const runBtn = document.getElementById("run");
+  const consoleEl = document.getElementById("console");
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.textBaseline = "alphabetic";
+  ctx.font = "16px 'JetBrains Mono', monospace";
+  ctx.lineWidth = 2;
+
+  let clickHandler = null;
+
+  const gfx = {
+    clear(){ ctx.clearRect(0,0,canvas.width,canvas.height); },
+    _css(a,b,c){ return (typeof a === "string") ? a : "rgb("+Math.round(a)+","+Math.round(b)+","+Math.round(c)+")"; },
+    color(a,b,c){ const css=this._css(a,b,c); ctx.fillStyle=css; ctx.strokeStyle=css; },
+    background(a,b,c){ ctx.fillStyle=this._css(a,b,c); ctx.fillRect(0,0,canvas.width,canvas.height); },
+    rect(x,y,w,h){ ctx.fillRect(x,y,w,h); },
+    circle(x,y,r){ ctx.beginPath(); ctx.arc(x,y,Math.max(0,r),0,Math.PI*2); ctx.fill(); },
+    line(x1,y1,x2,y2){ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); },
+    text(x,y,s){ ctx.fillText(s,x,y); },
+    font(px){ ctx.font = Math.round(px) + "px 'JetBrains Mono', monospace"; ctx.textBaseline = "alphabetic"; },
+    width(){ return canvas.width; },
+    height(){ return canvas.height; }
+  };
+  const io = {
+    output(s){ consoleEl.textContent += s; consoleEl.scrollTop = consoleEl.scrollHeight; },
+    input(p){ const r = window.prompt(p || ""); return Promise.resolve(r === null ? "" : r); },
+    gfx: gfx,
+    onClick(fn){ clickHandler = fn; }
+  };
+
+  // клики по холсту -> вызываем обработчик из программы
+  canvas.addEventListener("click", function(e){
+    if(!clickHandler) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    Promise.resolve(clickHandler(x, y)).catch(function(err){
+      io.output("\n[click] " + (err && err.amk ? err.toString() : err) + "\n");
+    });
+  });
+
+  async function runCode(){
+    consoleEl.textContent = "";
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.font = "16px 'JetBrains Mono', monospace";
+    clickHandler = null;         // сбросить старый обработчик кликов
+    runBtn.disabled = true;
+    try { await run(editor.value, io); }
+    catch(e){ io.output("\ninternal error: " + (e && e.message ? e.message : e) + "\n"); }
+    runBtn.disabled = false;
+  }
+
+  runBtn.addEventListener("click", runCode);
+  editor.addEventListener("keydown", function(e){
+    if((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); runCode(); }
+    if(e.key === "Tab"){ e.preventDefault(); const s=editor.selectionStart, en=editor.selectionEnd;
+      editor.value = editor.value.slice(0,s) + "  " + editor.value.slice(en);
+      editor.selectionStart = editor.selectionEnd = s+2; }
+  });
+
+  runCode();
+})();
+</script>
+</body>
+</html>
