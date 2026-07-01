@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aminakawa — документация</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e0d11;
+    --bg-2:#151319;
+    --card:#17151d;
+    --line:rgba(255,255,255,.09);
+    --line-2:rgba(255,255,255,.16);
+    --text:#ece9f0;
+    --muted:#9a96a6;
+    --muted-2:#6b6776;
+    --pink:#ff9ec7;
+    --pink-soft:rgba(255,158,199,.14);
+    --code:#f3d9e6;
+    --green:#9fe6b4;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Manrope',sans-serif;background:var(--bg);color:var(--text);
+    line-height:1.7;-webkit-font-smoothing:antialiased;padding-bottom:80px;
+  }
+
+  header{
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,158,199,.06), transparent);
+    padding:64px 24px 44px;text-align:center;
+  }
+  header .kicker{
+    font-family:'JetBrains Mono',monospace;font-size:.8rem;letter-spacing:.25em;
+    text-transform:uppercase;color:var(--pink);margin-bottom:14px;
+  }
+  header h1{
+    font-family:'Unbounded',sans-serif;font-weight:700;font-size:clamp(2.2rem,6vw,3.6rem);
+    letter-spacing:-.01em;margin-bottom:10px;
+  }
+  header p{color:var(--muted);max-width:560px;margin:0 auto;font-size:1.05rem}
+
+  .wrap{max-width:820px;margin:0 auto;padding:0 24px}
+
+  /* содержание */
+  .toc{
+    background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:26px 28px;margin:44px auto;
+  }
+  .toc h2{font-family:'JetBrains Mono',monospace;font-size:.8rem;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+  .toc ol{list-style:none;counter-reset:t;columns:2;column-gap:32px}
+  .toc li{counter-increment:t;margin-bottom:9px;break-inside:avoid}
+  .toc a{color:var(--text);text-decoration:none;font-weight:500}
+  .toc a::before{content:counter(t,decimal-leading-zero)" · ";color:var(--pink);
+    font-family:'JetBrains Mono',monospace;font-size:.85em}
+  .toc a:hover{color:var(--pink)}
+  @media(max-width:640px){.toc ol{columns:1}}
+
+  section{padding:34px 0;border-top:1px solid var(--line)}
+  section:first-of-type{border-top:none}
+  h2.sec{font-family:'Unbounded',sans-serif;font-weight:600;font-size:1.7rem;margin-bottom:6px;scroll-margin-top:20px}
+  h2.sec .n{color:var(--pink);font-size:1rem;font-family:'JetBrains Mono',monospace;margin-right:10px}
+  h3{font-weight:700;font-size:1.15rem;margin:26px 0 8px}
+  p{margin:12px 0;color:var(--text)}
+  p.muted{color:var(--muted)}
+  strong{color:#fff}
+  a{color:var(--pink)}
+
+  code.inl{
+    font-family:'JetBrains Mono',monospace;font-size:.9em;background:var(--pink-soft);
+    color:var(--code);padding:2px 7px;border-radius:6px;
+  }
+
+  pre{
+    background:var(--bg-2);border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin:14px 0;overflow-x:auto;position:relative;
+  }
+  pre code{font-family:'JetBrains Mono',monospace;font-size:.9rem;line-height:1.65;color:#e7e2ee;white-space:pre}
+  .copy{
+    position:absolute;top:10px;right:10px;background:rgba(255,255,255,.06);
+    border:1px solid var(--line);color:var(--muted);font-size:.7rem;
+    font-family:'JetBrains Mono',monospace;padding:5px 10px;border-radius:7px;cursor:pointer;
+    transition:all .15s ease;
+  }
+  .copy:hover{color:var(--text);border-color:var(--line-2);background:rgba(255,255,255,.1)}
+
+  .out{
+    display:flex;gap:12px;align-items:flex-start;
+    background:rgba(159,230,180,.06);border:1px solid rgba(159,230,180,.22);
+    border-radius:10px;padding:12px 16px;margin:10px 0 4px;
+  }
+  .out .lbl{font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--green);padding-top:3px;flex-shrink:0}
+  .out .val{font-family:'JetBrains Mono',monospace;font-size:.86rem;color:#d8f2df;white-space:pre-wrap}
+
+  .note{
+    background:var(--pink-soft);border-left:3px solid var(--pink);
+    border-radius:0 10px 10px 0;padding:12px 18px;margin:16px 0;color:var(--text);
+  }
+  .note b{color:var(--pink)}
+
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.92rem}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-family:'JetBrains Mono',monospace;font-size:.78rem;
+    letter-spacing:.05em;text-transform:uppercase}
+  td:first-child{font-family:'JetBrains Mono',monospace;color:var(--code)}
+
+  .step{display:flex;gap:16px;margin:14px 0}
+  .step .num{
+    flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--pink-soft);
+    color:var(--pink);font-family:'JetBrains Mono',monospace;font-weight:700;
+    display:flex;align-items:center;justify-content:center;font-size:.9rem;
+  }
+  .step .txt{padding-top:3px}
+
+  footer{text-align:center;color:var(--muted-2);font-family:'JetBrains Mono',monospace;
+    font-size:.8rem;padding:50px 24px 0}
+  footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">.amkawa · документация</div>
+  <h1>Aminakawa</h1>
+  <p>Твой маленький язык программирования. Эта страница объясняет всё с нуля — даже если ты никогда не писал код.</p>
+</header>
+
+<div class="wrap">
+
+  <div class="toc">
+    <h2>Содержание</h2>
+    <ol>
+      <li><a href="#start">Как запустить</a></li>
+      <li><a href="#print">Печать — nya</a></li>
+      <li><a href="#vars">Переменные</a></li>
+      <li><a href="#math">Числа и математика</a></li>
+      <li><a href="#text">Текст (строки)</a></li>
+      <li><a href="#bool">Да / нет</a></li>
+      <li><a href="#if">Если — moshi</a></li>
+      <li><a href="#while">Повтор — while</a></li>
+      <li><a href="#list">Списки</a></li>
+      <li><a href="#for">Перебор — for</a></li>
+      <li><a href="#func">Функции — tyan</a></li>
+      <li><a href="#builtins">Готовые функции</a></li>
+      <li><a href="#bot">Discord-бот</a></li>
+      <li><a href="#errors">Частые ошибки</a></li>
+      <li><a href="#cheat">Шпаргалка</a></li>
+    </ol>
+  </div>
+
+  <!-- 1 -->
+  <section id="start">
+    <h2 class="sec"><span class="n">01</span>Как запустить</h2>
+    <p>Программа Aminakawa — это обычный текстовый файл с именем, оканчивающимся на <code class="inl">.amkawa</code>. Ты пишешь в нём строчки, а компьютер их выполняет сверху вниз.</p>
+
+    <h3>Способ 1 — через VSCode (проще всего)</h3>
+    <div class="step"><div class="num">1</div><div class="txt">Установи расширение (папку из <code class="inl">aminakawa-vscode.zip</code> кинь в <code class="inl">~/.vscode/extensions/</code>, на Windows — <code class="inl">%USERPROFILE%\.vscode\extensions\</code>) и перезапусти VSCode.</div></div>
+    <div class="step"><div class="num">2</div><div class="txt">Создай новый файл, сохрани его как <code class="inl">test.amkawa</code>.</div></div>
+    <div class="step"><div class="num">3</div><div class="txt">Напиши одну строчку:</div></div>
+    <pre><code>nya("привет, мир")</code></pre>
+    <div class="step"><div class="num">4</div><div class="txt">Нажми кнопку <b>▶</b> справа сверху (или <code class="inl">Ctrl+F5</code>). Снизу откроется чёрное окно (терминал) — там будет результат.</div></div>
+    <div class="out"><span class="lbl">выведет</span><span class="val">привет, мир</span></div>
+
+    <h3>Способ 2 — через терминал</h3>
+    <p>Открой папку с файлом <code class="inl">amkawa.py</code> в терминале и напиши:</p>
+    <pre><code>python amkawa.py test.amkawa</code></pre>
+    <div class="note">Если пишет, что <b>python</b> не найден — попробуй <code class="inl">python3</code> вместо <code class="inl">python</code>.</div>
+  </section>
+
+  <!-- 2 -->
+  <section id="print">
+    <h2 class="sec"><span class="n">02</span>Печать — <code class="inl">nya</code></h2>
+    <p><code class="inl">nya(...)</code> — это «показать на экране». Всё, что внутри скобок, выведется в терминал.</p>
+    <pre><code>nya("Konnichiwa!")
+nya("Меня зовут", "Хока")
+nya(2 + 2)</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">Konnichiwa!
+Меня зовут Хока
+4</span></div>
+    <p class="muted">Можно выводить несколько штук через запятую — они встанут через пробел.</p>
+  </section>
+
+  <!-- 3 -->
+  <section id="vars">
+    <h2 class="sec"><span class="n">03</span>Переменные</h2>
+    <p>Переменная — это <strong>коробка с именем</strong>, куда можно положить значение и потом им пользоваться. Кладём через знак <code class="inl">=</code>.</p>
+    <pre><code>имя = "Аои"
+возраст = 17
+
+nya(имя)
+nya("возраст:", возраст)</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">Аои
+возраст: 17</span></div>
+    <p>Значение можно менять в любой момент — даже на основе старого:</p>
+    <pre><code>счёт = 0
+счёт = счёт + 10
+nya(счёт)</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">10</span></div>
+  </section>
+
+  <!-- 4 -->
+  <section id="math">
+    <h2 class="sec"><span class="n">04</span>Числа и математика</h2>
+    <p>Считать можно как в калькуляторе:</p>
+    <table>
+      <tr><th>знак</th><th>что делает</th><th>пример</th><th>результат</th></tr>
+      <tr><td>+</td><td>сложить</td><td>5 + 3</td><td>8</td></tr>
+      <tr><td>-</td><td>вычесть</td><td>5 - 3</td><td>2</td></tr>
+      <tr><td>*</td><td>умножить</td><td>5 * 3</td><td>15</td></tr>
+      <tr><td>/</td><td>поделить</td><td>7 / 2</td><td>3.5</td></tr>
+      <tr><td>%</td><td>остаток от деления</td><td>7 % 2</td><td>1</td></tr>
+    </table>
+    <pre><code>nya(10 * 5)
+nya(100 / 4)
+nya(10 % 3)</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">50
+25
+1</span></div>
+  </section>
+
+  <!-- 5 -->
+  <section id="text">
+    <h2 class="sec"><span class="n">05</span>Текст (строки)</h2>
+    <p>Текст всегда пишется <strong>в кавычках</strong>: <code class="inl">"вот так"</code>. Склеивать куски текста можно плюсом:</p>
+    <pre><code>имя = "Рин"
+привет = "Привет, " + имя + "!"
+nya(привет)</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">Привет, Рин!</span></div>
+    <div class="note">Число можно приклеить к тексту тоже — оно само превратится в текст: <code class="inl">"мне " + 17</code> даст <code class="inl">мне 17</code>.</div>
+  </section>
+
+  <!-- 6 -->
+  <section id="bool">
+    <h2 class="sec"><span class="n">06</span>Да / нет — <code class="inl">hai</code> / <code class="inl">iie</code></h2>
+    <p>Иногда ответ — просто «да» или «нет». В Aminakawa это <code class="inl">hai</code> (да) и <code class="inl">iie</code> (нет).</p>
+    <p>Сравнения дают «да» или «нет»:</p>
+    <table>
+      <tr><th>знак</th><th>смысл</th><th>пример</th><th>ответ</th></tr>
+      <tr><td>==</td><td>равно</td><td>5 == 5</td><td>hai</td></tr>
+      <tr><td>!=</td><td>не равно</td><td>5 != 3</td><td>hai</td></tr>
+      <tr><td>&gt;</td><td>больше</td><td>5 &gt; 3</td><td>hai</td></tr>
+      <tr><td>&lt;</td><td>меньше</td><td>5 &lt; 3</td><td>iie</td></tr>
+      <tr><td>&gt;=</td><td>больше или равно</td><td>5 &gt;= 5</td><td>hai</td></tr>
+      <tr><td>&lt;=</td><td>меньше или равно</td><td>4 &lt;= 3</td><td>iie</td></tr>
+    </table>
+    <p>А ещё их можно соединять: <code class="inl">and</code> (и), <code class="inl">or</code> (или), <code class="inl">not</code> (не).</p>
+    <pre><code>nya(5 &gt; 3)
+nya(5 &gt; 3 and 2 &gt; 10)
+nya(not iie)</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">hai
+iie
+hai</span></div>
+  </section>
+
+  <!-- 7 -->
+  <section id="if">
+    <h2 class="sec"><span class="n">07</span>Если — <code class="inl">moshi</code></h2>
+    <p>Самое важное. <code class="inl">moshi</code> = «если». Он проверяет условие, и <strong>если оно «да»</strong> — выполняет то, что в фигурных скобках <code class="inl">{ }</code>. Если «нет» — выполняет <code class="inl">else</code> (иначе).</p>
+    <pre><code>возраст = 20
+
+moshi возраст &gt;= 18 {
+  nya("взрослый")
+} else {
+  nya("ещё маленький")
+}</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">взрослый</span></div>
+
+    <h3>Несколько вариантов подряд</h3>
+    <p>Если случаев больше двух — цепляй <code class="inl">else moshi</code>:</p>
+    <pre><code>оценка = 4
+
+moshi оценка == 5 {
+  nya("отлично!")
+} else moshi оценка == 4 {
+  nya("хорошо")
+} else {
+  nya("бывает")
+}</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">хорошо</span></div>
+    <div class="note"><b>Правило скобок:</b> после <code class="inl">moshi условие</code> всегда идёт <code class="inl">{</code>, а в конце блока — <code class="inl">}</code>. Пробелы и отступы не важны — важны именно скобки.</div>
+  </section>
+
+  <!-- 8 -->
+  <section id="while">
+    <h2 class="sec"><span class="n">08</span>Повтор — <code class="inl">while</code></h2>
+    <p><code class="inl">while</code> = «пока». Он повторяет блок <strong>пока условие «да»</strong>.</p>
+    <pre><code>n = 1
+
+while n &lt;= 3 {
+  nya("шаг", n)
+  n = n + 1
+}</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">шаг 1
+шаг 2
+шаг 3</span></div>
+    <div class="note"><b>Важно!</b> Внутри цикла что-то должно менять условие (тут <code class="inl">n = n + 1</code>), иначе он будет крутиться вечно и программа зависнет.</div>
+  </section>
+
+  <!-- 9 -->
+  <section id="list">
+    <h2 class="sec"><span class="n">09</span>Списки</h2>
+    <p>Список — это <strong>несколько значений вместе</strong>, в квадратных скобках через запятую.</p>
+    <pre><code>друзья = ["Аои", "Рин", "Юки"]
+
+nya(друзья)
+nya("сколько:", len(друзья))</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">[Аои, Рин, Юки]
+сколько: 3</span></div>
+
+    <h3>Взять один элемент</h3>
+    <p>По номеру в квадратных скобках. <strong>Счёт идёт с нуля!</strong> Первый — <code class="inl">[0]</code>, второй — <code class="inl">[1]</code>.</p>
+    <pre><code>друзья = ["Аои", "Рин", "Юки"]
+nya(друзья[0])
+nya(друзья[2])</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">Аои
+Юки</span></div>
+
+    <h3>Добавить в список</h3>
+    <pre><code>список = [1, 2]
+push(список, 3)
+nya(список)</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">[1, 2, 3]</span></div>
+  </section>
+
+  <!-- 10 -->
+  <section id="for">
+    <h2 class="sec"><span class="n">10</span>Перебор — <code class="inl">for … in</code></h2>
+    <p>Пройтись по каждому элементу списка: <code class="inl">for имя in список { ... }</code>. На каждом круге <code class="inl">имя</code> — это следующий элемент.</p>
+    <pre><code>друзья = ["Аои", "Рин", "Юки"]
+
+for кто in друзья {
+  nya("привет,", кто)
+}</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">привет, Аои
+привет, Рин
+привет, Юки</span></div>
+
+    <h3>Перебрать числа</h3>
+    <p><code class="inl">range(a, b)</code> — это список чисел от <code class="inl">a</code> до <code class="inl">b</code> (не включая <code class="inl">b</code>).</p>
+    <pre><code>for i in range(1, 5) {
+  nya(i)
+}</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">1
+2
+3
+4</span></div>
+  </section>
+
+  <!-- 11 -->
+  <section id="func">
+    <h2 class="sec"><span class="n">11</span>Функции — <code class="inl">tyan</code></h2>
+    <p>Функция — это <strong>кусок кода со своим именем</strong>, который можно вызывать сколько угодно раз. Создаём словом <code class="inl">tyan</code>. Значение отдаём наружу словом <code class="inl">back</code> (вернуть).</p>
+    <pre><code>tyan поздороваться(имя) {
+  back "Привет, " + имя + "!"
+}
+
+nya(поздороваться("Аои"))
+nya(поздороваться("Рин"))</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">Привет, Аои!
+Привет, Рин!</span></div>
+
+    <p>В скобках <code class="inl">(имя)</code> — это то, что функция принимает (можно несколько через запятую). Пример со счётом:</p>
+    <pre><code>tyan сумма(a, b) {
+  back a + b
+}
+
+nya(сумма(2, 3))
+nya(сумма(10, 20))</code></pre>
+    <div class="out"><span class="lbl">выведет</span><span class="val">5
+30</span></div>
+  </section>
+
+  <!-- 12 -->
+  <section id="builtins">
+    <h2 class="sec"><span class="n">12</span>Готовые функции</h2>
+    <p>Эти функции уже встроены — просто пользуйся:</p>
+    <table>
+      <tr><th>функция</th><th>что делает</th></tr>
+      <tr><td>nya(x)</td><td>показать на экране</td></tr>
+      <tr><td>len(x)</td><td>длина текста или списка</td></tr>
+      <tr><td>num(x)</td><td>превратить текст в число</td></tr>
+      <tr><td>str(x)</td><td>превратить в текст</td></tr>
+      <tr><td>ask(вопрос)</td><td>спросить у пользователя, вернуть введённое</td></tr>
+      <tr><td>range(a, b)</td><td>список чисел от a до b</td></tr>
+      <tr><td>push(список, x)</td><td>добавить x в конец списка</td></tr>
+    </table>
+    <p>Пример с вводом:</p>
+    <pre><code>имя = ask("Как тебя зовут? ")
+nya("Йо,", имя)</code></pre>
+    <p class="muted">При запуске программа остановится и будет ждать, пока ты напечатаешь ответ в терминале.</p>
+  </section>
+
+  <!-- 13 -->
+  <section id="bot">
+    <h2 class="sec"><span class="n">13</span>Discord-бот</h2>
+    <p>В Aminakawa встроен свой Discord (написан с нуля). Бот умеет читать сообщения и отвечать. Вот весь бот:</p>
+    <pre><code># токен вставь свой
+bot("ТВОЙ-ТОКЕН-БОТА")
+
+tyan на_сообщение(text, channel, author) {
+  moshi text == "!ping" {
+    say(channel, "pong! nya~")
+  }
+  moshi text == "!привет" {
+    say(channel, "Konnichiwa, " + author + "!")
+  }
+}
+
+on_message(на_сообщение)
+run()</code></pre>
+
+    <h3>Что тут что</h3>
+    <table>
+      <tr><td>bot("...")</td><td>вставляешь токен своего бота</td></tr>
+      <tr><td>tyan на_сообщение(text, channel, author)</td><td>что делать на каждое сообщение. <br>text — текст, channel — куда отвечать, author — ник написавшего</td></tr>
+      <tr><td>say(channel, "...")</td><td>отправить сообщение в канал</td></tr>
+      <tr><td>on_message(...)</td><td>подключить твою функцию</td></tr>
+      <tr><td>run()</td><td>запустить бота</td></tr>
+    </table>
+
+    <h3>Добавить свою команду</h3>
+    <p>Просто скопируй блок <code class="inl">moshi</code> и поменяй триггер и ответ:</p>
+    <pre><code>  moshi text == "!дайс" {
+    say(channel, "выпало... 6! (всегда 6, sugoi)")
+  }</code></pre>
+
+    <h3>Что сделать до запуска</h3>
+    <div class="step"><div class="num">1</div><div class="txt">Зайди на <a href="https://discord.com/developers" target="_blank" rel="noopener">discord.com/developers</a>, создай приложение → раздел <b>Bot</b> → скопируй <b>Token</b>.</div></div>
+    <div class="step"><div class="num">2</div><div class="txt">На той же странице <b>Bot</b> включи тумблер <b>Message Content Intent</b> — иначе бот не видит текст сообщений.</div></div>
+    <div class="step"><div class="num">3</div><div class="txt">Пригласи бота на свой сервер (с правом писать сообщения).</div></div>
+    <div class="step"><div class="num">4</div><div class="txt">Запусти файл как обычную программу: кнопкой <b>▶</b> или <code class="inl">python amkawa.py bot.amkawa</code>.</div></div>
+    <div class="note"><b>Не заработало?</b> Скопируй красный текст ошибки из терминала и скинь мне — починю. Discord-часть я не мог проверить вживую, так что это нормально.</div>
+  </section>
+
+  <!-- 14 -->
+  <section id="errors">
+    <h2 class="sec"><span class="n">14</span>Частые ошибки</h2>
+    <p>Если программа выдала <code class="inl">amkawa error: ...</code> — не пугайся, вот что это значит:</p>
+    <table>
+      <tr><th>ошибка</th><th>что значит и как чинить</th></tr>
+      <tr><td>unknown name 'x'</td><td>используешь переменную или функцию, которую не создал. Часто — опечатка в имени.</td></tr>
+      <tr><td>expected '}'</td><td>забыл закрыть фигурную скобку <code class="inl">}</code>.</td></tr>
+      <tr><td>expected ')'</td><td>забыл закрыть круглую скобку <code class="inl">)</code>.</td></tr>
+      <tr><td>string is missing a closing quote</td><td>у текста нет второй кавычки <code class="inl">"</code>.</td></tr>
+      <tr><td>division by zero</td><td>делишь на ноль — так нельзя.</td></tr>
+      <tr><td>'for ... in ...' needs a list or text</td><td>после <code class="inl">in</code> должен быть список (или <code class="inl">range(...)</code>).</td></tr>
+      <tr><td>function 'x' wants N argument(s)</td><td>вызвал функцию с неправильным числом значений в скобках.</td></tr>
+    </table>
+    <p class="muted">В каждой ошибке есть номер строки (<code class="inl">line 5</code>) — смотри именно туда.</p>
+  </section>
+
+  <!-- 15 -->
+  <section id="cheat">
+    <h2 class="sec"><span class="n">15</span>Шпаргалка</h2>
+    <table>
+      <tr><th>слово</th><th>смысл</th></tr>
+      <tr><td>nya(x)</td><td>напечатать</td></tr>
+      <tr><td>имя = значение</td><td>переменная</td></tr>
+      <tr><td>tyan имя(a) { back x }</td><td>функция</td></tr>
+      <tr><td>moshi усл { } else { }</td><td>если / иначе</td></tr>
+      <tr><td>while усл { }</td><td>повторять пока</td></tr>
+      <tr><td>for x in список { }</td><td>перебор</td></tr>
+      <tr><td>and / or / not</td><td>и / или / не</td></tr>
+      <tr><td>hai / iie</td><td>да / нет</td></tr>
+      <tr><td>mu</td><td>ничего (пусто)</td></tr>
+      <tr><td>== != &gt; &lt; &gt;= &lt;=</td><td>сравнения</td></tr>
+      <tr><td>+ - * / %</td><td>математика</td></tr>
+      <tr><td># ...</td><td>комментарий (не выполняется)</td></tr>
+      <tr><td>[a, b, c]</td><td>список</td></tr>
+      <tr><td>bot / on_message / say / run</td><td>Discord-бот</td></tr>
+    </table>
+  </section>
+
+  <footer>
+    Aminakawa · <code class="inl">.amkawa</code> · застрял — просто спроси, помогу разобраться
+  </footer>
+
+</div>
+
+<script>
+  // кнопки "копировать" на блоках кода
+  document.querySelectorAll('pre').forEach(pre=>{
+    const btn=document.createElement('button');
+    btn.className='copy'; btn.textContent='копировать';
+    btn.addEventListener('click',()=>{
+      navigator.clipboard.writeText(pre.querySelector('code').innerText).then(()=>{
+        btn.textContent='скопировано';
+        setTimeout(()=>btn.textContent='копировать',1200);
+      });
+    });
+    pre.appendChild(btn);
+  });
+</script>
+</body>
+</html>
