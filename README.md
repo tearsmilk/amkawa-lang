@@ -1,126 +1,43 @@
-# Кароче ебитесь с этим всем сами, эту хуету написал клод, так что если вам нечего делать, то можете взять и накодить что-то другое или дать схавать другой нейронке, чтобы она там померла в этом говнокоде, удачи ребят!
-Кидайте сюда реквесты или как оно там пашет или свои репозитории линкуйте, чтобы я знал, что вы хоть чет делаете
+# Aminakawa 🌸
 
+A tiny **anime-flavored programming language**. Simple syntax, runs anywhere — no install.
 
-# Aminakawa `.amkawa`
-
-Маленький **язык программирования** с анимешной темой. Свой синтаксис, свой
-интерпретатор (лексер → парсер → вычислитель), всё написано с нуля.
-
-Слова английские, тема анимешная (`tyan`, `moshi`, `nya`, `hai`, `iie`…).
-Блоки — фигурными скобками `{ }`, отступы **не важны** (никаких ошибок с пробелами).
-
-> Честно: это **отдельный язык для веселья и обучения**. Обычные Python-библиотеки
-> в нём не работают. Но Discord встроен — его я написал с нуля (свой WebSocket +
-> REST, без discord.py), так что простого бота на нём собрать можно.
-
----
-
-## Запуск
-
-```bash
-python amkawa.py examples/hello.amkawa
-```
-
-Если `python` не находится — попробуй `python3`.
-
----
-
-## Синтаксис за минуту
+- ▶ **Try it now:** open `playground/index.html` in a browser. Write code, hit Run, it draws.
+- 🧩 **In VSCode:** install `vscode-extension/` (copy to `~/.vscode/extensions/`) and press ▶ on any `.amkawa` file. No Python needed.
+- 📖 **Learn it:** open `docs/guide.html` — a from-zero tutorial.
 
 ```
-# это комментарий
-
-имя = "Hoka"                # переменная
-nya("Yo,", имя, "chan~")    # печать (nya = print)
-
-tyan square(x) {            # функция (tyan = def)
-  back x * x                # вернуть (back = return)
+tyan hello(name) {
+  back "Konnichiwa, " + name + "!"
 }
 
-moshi square(4) == 16 {     # если (moshi = if)
-  nya("sugoi~")
-} else {                    # иначе
-  nya("nani?!")
-}
+nya(hello("Aoi"))
 
-n = 0
-while n < 3 {               # цикл-пока (while)
-  nya(n)
-  n = n + 1
-}
-
-friends = ["Aoi", "Rin", "Yuki"]
-for f in friends {          # перебор списка (for ... in ...)
-  nya(f)
-}
+# draw something
+background("#0e0d11")
+color("#ff9ec7")
+circle(100, 100, 40)
 ```
 
----
+## Keywords
+`tyan` def · `back` return · `moshi`/`else` if · `while` · `for … in …` ·
+`and`/`or`/`not` · `hai`/`iie` true/false · `mu` null
 
-## Все слова
+## Built-ins
+`nya` print · `len` · `num` · `str` · `ask` input · `range` · `push` · `random` ·
+drawing: `background` `color` `rect` `circle` `line` `dot` `text` `width` `height`
 
-| слово        | что это           |     | слово        | что это            |
-|--------------|-------------------|-----|--------------|--------------------|
-| `tyan`       | функция (def)     |     | `and`        | и                  |
-| `back`       | вернуть (return)  |     | `or`         | или                |
-| `moshi`      | если (if)         |     | `not`        | не                 |
-| `else`       | иначе             |     | `hai`        | истина (true)      |
-| `while`      | цикл-пока         |     | `iie`        | ложь (false)       |
-| `for … in …` | перебор списка    |     | `mu`         | ничего (null)      |
+## Project layout
+- `src/amkawa.js` — the language (lexer → parser → interpreter), in JavaScript.
+- `playground/index.html` — browser IDE with a canvas. Self-contained.
+- `vscode-extension/` — syntax highlighting + Run button (pure JS, no Python).
+- `reference-python/` — alternate implementation in Python, with **Discord bots** and a **web server** built from scratch.
+- `examples/` — sample programs.
+- `docs/guide.html` — beginner tutorial.
 
-Встроенные функции:
+## Status
+Working core: variables, functions, conditions, loops, lists, math, strings, 2D drawing.
+See `ROADMAP.md` for what's next, and `CONTRIBUTING.md` to jump in.
 
-| функция              | что делает                        |
-|----------------------|-----------------------------------|
-| `nya(...)`           | печатает (print)                  |
-| `len(x)`             | длина строки/списка               |
-| `num(x)`             | превратить в число                |
-| `str(x)`             | превратить в текст                |
-| `ask(подсказка)`     | спросить ввод у пользователя      |
-| `range(a, b)`        | список чисел от a до b            |
-| `push(список, x)`    | добавитьx в конец списка          |
-| `bot(token)`         | задать токен бота (Discord)       |
-| `on_message(func)`   | что делать на сообщение           |
-| `say(channel, text)` | отправить сообщение в канал       |
-| `run()`              | запустить бота                    |
-
----
-
-## Discord-бот
-
-```
-bot("ТОКЕН-ТВОЕГО-БОТА")
-
-tyan on_msg(text, channel, author) {
-  moshi text == "!ping" {
-    say(channel, "pong! nya~")
-  }
-}
-
-on_message(on_msg)
-run()
-```
-
-`on_msg` получает три вещи: `text` (текст сообщения), `channel` (куда отвечать),
-`author` (ник написавшего).
-
-**Важно перед запуском бота:**
-1. Создай бота на https://discord.com/developers → скопируй **токен**.
-2. На странице **Bot** включи тумблер **Message Content Intent** (иначе бот не видит текст).
-3. Пригласи бота на сервер с правом отправлять сообщения.
-4. Запусти: `python amkawa.py examples/bot.amkawa`.
-
-> Discord-часть я написал сам и не смог проверить её вживую (у меня нет интернета
-> в песочнице). Логика кадров WebSocket протестирована, но если бот не подключится —
-> скинь мне ошибку из терминала, поправлю.
-
----
-
-## Что внутри (сорцы)
-
-- `amkawa.py` — весь язык: лексер, парсер, интерпретатор, встроенные функции.
-- `amk_discord.py` — свой Discord-клиент с нуля (только стандартная библиотека Python).
-- `examples/` — примеры программ.
-
-Хочешь свои слова, новые возможности или иконку файлов — скажи.
+## License
+MIT — see `LICENSE`.
