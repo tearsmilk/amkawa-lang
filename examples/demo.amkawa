@@ -1,0 +1,36 @@
+# functions, loops, conditions, lists
+
+tyan square(x) {
+  back x * x
+}
+
+for i in range(1, 6) {
+  nya(i, "squared =", square(i))
+}
+
+n = 0
+while n < 3 {
+  nya("n =", n)
+  n = n + 1
+}
+
+moshi square(4) == 16 and not iie {
+  nya("it works! sugoi~")
+} else {
+  nya("nani?!")
+}
+
+friends = ["Aoi", "Rin", "Yuki"]
+for f in friends {
+  nya("friend:", f)
+}
+nya("count:", len(friends))
+
+# fizzbuzz-ish
+for k in range(1, 8) {
+  moshi k % 3 == 0 {
+    nya(k, "-> neko")
+  } else {
+    nya(k)
+  }
+}

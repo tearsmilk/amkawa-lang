@@ -1,0 +1,21 @@
+# a simple discord bot in Aminakawa
+# 1) put your bot token below
+# 2) enable "Message Content Intent" in the Developer Portal
+# 3) run:  python amkawa.py bot.amkawa
+
+bot("YOUR-BOT-TOKEN-HERE")
+
+tyan on_msg(text, channel, author) {
+  moshi text == "!ping" {
+    say(channel, "pong! nya~")
+  }
+  moshi text == "!hello" {
+    say(channel, "konnichiwa, " + author + " chan~")
+  }
+  moshi text == "!dice" {
+    say(channel, "you rolled... 6! (always 6, sugoi)")
+  }
+}
+
+on_message(on_msg)
+run()
