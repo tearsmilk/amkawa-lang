@@ -1,0 +1,10 @@
+# рисуем случайную композицию (жми Run в playground ещё раз для новой)
+background("#0e0d11")
+
+for i in range(0, 40) {
+  color("#ff9ec7")
+  moshi random(0, 1) == 0 { color("#7cc7ff") }
+  circle(random(20, 500), random(20, 360), random(6, 26))
+}
+
+nya("случайных кружков: 40")

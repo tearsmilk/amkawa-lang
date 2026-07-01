@@ -1,0 +1,4 @@
+# hello world in Aminakawa
+nya("Konnichiwa, sekai!")
+name = "Hoka"
+nya("Yo,", name, "chan~")
