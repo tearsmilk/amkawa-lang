@@ -1,7 +1,8 @@
-"""Install/remove the "Amkawa Voice Mic" virtual audio device (a renamed BlackHole HAL driver).
+"""Install/remove the virtual microphone that Discord listens to.
 
-The app plays the converted voice into this device; Discord (or any app) then picks
-"Amkawa Voice Mic" as its microphone.
+Two flavours, whichever is shipped inside the app:
+- `drivers/AmkawaVoice.driver` — BlackHole renamed to "Amkawa Voice Mic" (built on a Mac, see build_driver.sh);
+- `drivers/BlackHole2ch.pkg` — the official, signed BlackHole 2ch installer (device "BlackHole 2ch").
 """
 import shlex
 import subprocess
@@ -10,27 +11,44 @@ from pathlib import Path
 
 from .paths import resource_path
 
-DRIVER_BUNDLE = "AmkawaVoice.driver"
-DEVICE_NAME = "Amkawa Voice Mic"
 HAL_DIR = Path("/Library/Audio/Plug-Ins/HAL")
+CUSTOM_DRIVER = "AmkawaVoice.driver"
+CUSTOM_DEVICE = "Amkawa Voice Mic"
+BLACKHOLE_PKG = "BlackHole2ch.pkg"
+BLACKHOLE_DRIVER = "BlackHole2ch.driver"
+BLACKHOLE_DEVICE = "BlackHole 2ch"
 
 
-def bundled_driver() -> Path:
-    candidates = [resource_path("drivers", DRIVER_BUNDLE)]
-    if getattr(sys, "frozen", False):  # AmkawaVoice.app/Contents/Resources/drivers
-        candidates.append(Path(sys.executable).resolve().parent.parent / "Resources" / "drivers" / DRIVER_BUNDLE)
+def _find(name):
+    candidates = [resource_path("drivers", name)]
+    # inside "Amkawa Voice.app": Contents/MacOS/<exe> -> Contents/Resources/drivers
+    candidates.append(Path(sys.executable).resolve().parent.parent / "Resources" / "drivers" / name)
     for path in candidates:
         if path.exists():
             return path
-    return candidates[0]
+    return None
+
+
+def _flavour():
+    if _find(CUSTOM_DRIVER):
+        return "custom"
+    if _find(BLACKHOLE_PKG):
+        return "blackhole"
+    return None
+
+
+def device_name():
+    if (HAL_DIR / CUSTOM_DRIVER).exists() or _flavour() == "custom":
+        return CUSTOM_DEVICE
+    return BLACKHOLE_DEVICE
 
 
 def is_installed() -> bool:
-    return (HAL_DIR / DRIVER_BUNDLE).exists()
+    return (HAL_DIR / CUSTOM_DRIVER).exists() or (HAL_DIR / BLACKHOLE_DRIVER).exists()
 
 
 def can_install() -> bool:
-    return sys.platform == "darwin" and bundled_driver().exists()
+    return sys.platform == "darwin" and _flavour() is not None
 
 
 def _run_as_admin(shell: str):
@@ -49,17 +67,22 @@ _RESTART_AUDIO = ("(launchctl kickstart -kp system/com.apple.audio.coreaudiod "
 
 
 def install():
-    src = bundled_driver()
-    if not src.exists():
+    flavour = _flavour()
+    if flavour == "custom":
+        src = _find(CUSTOM_DRIVER)
+        dst = HAL_DIR / CUSTOM_DRIVER
+        q_src, q_dst, q_dir = shlex.quote(str(src)), shlex.quote(str(dst)), shlex.quote(str(HAL_DIR))
+        _run_as_admin(
+            f"mkdir -p {q_dir} && rm -rf {q_dst} && cp -R {q_src} {q_dst} && "
+            f"chown -R root:wheel {q_dst} && chmod -R 755 {q_dst} && "
+            f"xattr -dr com.apple.quarantine {q_dst} 2>/dev/null; {_RESTART_AUDIO}")
+    elif flavour == "blackhole":
+        pkg = shlex.quote(str(_find(BLACKHOLE_PKG)))
+        _run_as_admin(f"installer -pkg {pkg} -target / && {_RESTART_AUDIO}")
+    else:
         raise RuntimeError("Драйвер не найден внутри приложения")
-    dst = HAL_DIR / DRIVER_BUNDLE
-    q_src, q_dst, q_dir = shlex.quote(str(src)), shlex.quote(str(dst)), shlex.quote(str(HAL_DIR))
-    _run_as_admin(
-        f"mkdir -p {q_dir} && rm -rf {q_dst} && cp -R {q_src} {q_dst} && "
-        f"chown -R root:wheel {q_dst} && chmod -R 755 {q_dst} && "
-        f"xattr -dr com.apple.quarantine {q_dst} 2>/dev/null; {_RESTART_AUDIO}")
 
 
 def uninstall():
-    dst = shlex.quote(str(HAL_DIR / DRIVER_BUNDLE))
-    _run_as_admin(f"rm -rf {dst}; {_RESTART_AUDIO}")
+    targets = " ".join(shlex.quote(str(HAL_DIR / d)) for d in (CUSTOM_DRIVER, BLACKHOLE_DRIVER))
+    _run_as_admin(f"rm -rf {targets}; {_RESTART_AUDIO}")

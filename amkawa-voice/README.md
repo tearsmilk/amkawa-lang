@@ -13,7 +13,14 @@
     но на Intel CPU задержка ~0.6–1 с.
 - Шумодав, усиление, индикаторы уровня, светлая/тёмная тема.
 
-## Скачать
+## Скачать / собрать
+
+**Без Mac** (так собран готовый dmg): `python3 packaging/build_dmg_portable.py --dmg-tool <libdmg-hfsplus/dmg>` —
+собирает .app из готового portable-Python для macOS x86_64 и macOS-колёс зависимостей, ничего не компилируя,
+проверяет, что все бинарники x86_64 и требуют macOS ≤ 11.0, и упаковывает в .dmg (нужны xorriso, Pillow, macholib).
+Виртуальный микрофон в такой сборке — официальный подписанный BlackHole 2ch.
+
+**На Mac / в GitHub Actions** (включите Actions в настройках репозитория):
 
 Готовый `.dmg` собирается в GitHub Actions (workflow *Amkawa Voice (macOS Intel .dmg)*) на Intel-раннере macOS.
 Скачать: вкладка **Actions** → последний успешный запуск → артефакт `AmkawaVoice-macOS-x64`.

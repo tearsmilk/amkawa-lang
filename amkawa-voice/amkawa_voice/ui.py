@@ -450,9 +450,9 @@ class MainWindow(QMainWindow):
         dl.addLayout(drow)
         dl.addWidget(muted(
             "1. Установите виртуальный микрофон кнопкой выше (нужен пароль администратора).\n"
-            f"2. Здесь в «Вывод в Discord» выберите «{virtual_mic.DEVICE_NAME}».\n"
+            f"2. Здесь в «Вывод в Discord» выберите «{virtual_mic.device_name()}».\n"
             "3. В Discord: Настройки → Голос и видео → Устройство ввода → "
-            f"«{virtual_mic.DEVICE_NAME}».\n"
+            f"«{virtual_mic.device_name()}».\n"
             "4. В Discord выключите «Шумоподавление» (Krisp) и «Эхоподавление» — они портят голос.\n"
             "5. Нажмите «Включить голос». Слушать себя можно через «Наушники» + «Слушать себя»."))
         lay.addWidget(dcard)
@@ -768,8 +768,8 @@ class MainWindow(QMainWindow):
     def refresh_driver_status(self):
         installed = virtual_mic.is_installed()
         others = [o for o in list_devices()[1] if is_virtual_mic(o)]
-        if installed or any(virtual_mic.DEVICE_NAME in o for o in others):
-            self.driver_status.setText(f"✓ Виртуальный микрофон «{virtual_mic.DEVICE_NAME}» установлен.")
+        if installed or any(virtual_mic.device_name() in o for o in others):
+            self.driver_status.setText(f"✓ Виртуальный микрофон «{virtual_mic.device_name()}» установлен.")
             self.driver_status.setObjectName("StatusOk")
             self.driver_btn.setText("Удалить виртуальный микрофон")
         else:
