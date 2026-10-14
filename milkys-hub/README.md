@@ -16,3 +16,8 @@
 Запуск из исходников: `pip install -r requirements.txt && python run.py`.
 Сборка `.dmg`: GitHub Actions (*Milkys Hub (macOS Intel .dmg)*) или `packaging/build_macos.sh` на Intel Mac.
 Дизайн и UI-kit: Figma, файл «Milkys Hub — UI».
+
+![Главный экран](design/screenshots/main-light.png)
+![Тёмная тема](design/screenshots/main-dark.png)
+
+Figma-скрипты UI-кита и экранов — в [`design/figma`](design/figma).
