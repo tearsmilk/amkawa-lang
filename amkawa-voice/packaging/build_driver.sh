@@ -8,6 +8,9 @@ DRIVER_NAME="AmkawaVoice"
 DEVICE_NAME="Amkawa Voice Mic"
 BUNDLE_ID="ink.amkawa.voice.driver"
 
+# xcodebuild splits GCC_PREPROCESSOR_DEFINITIONS on spaces, so escape them inside the name
+DEVICE_NAME_ESC="${DEVICE_NAME// /\\ }"
+
 WORK="$(mktemp -d)"
 git clone --depth 1 --branch "$BLACKHOLE_TAG" https://github.com/ExistentialAudio/BlackHole "$WORK/BlackHole"
 cd "$WORK/BlackHole"
@@ -22,10 +25,11 @@ xcodebuild \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO \
   GCC_PREPROCESSOR_DEFINITIONS='$GCC_PREPROCESSOR_DEFINITIONS
   kNumber_Of_Channels=2
-  kDriver_Name=\"'"$DEVICE_NAME"'\"
+  kDriver_Name=\"'"$DEVICE_NAME_ESC"'\"
   kManufacturer_Name=\"Amkawa\"
   kPlugIn_BundleID=\"'"$BUNDLE_ID"'\"' \
-  | tail -n 5
+  > "$WORK/xcodebuild.log" 2>&1 || { grep -E "error:|note:" "$WORK/xcodebuild.log" | head -n 40; tail -n 20 "$WORK/xcodebuild.log"; exit 1; }
+tail -n 3 "$WORK/xcodebuild.log"
 
 DRV="$WORK/build/BlackHole.driver"
 # unique factory UUID so it can live next to a real BlackHole install
