@@ -1,7 +1,7 @@
 """Install/remove the virtual microphone that Discord listens to.
 
 Two flavours, whichever is shipped inside the app:
-- `drivers/AmkawaVoice.driver` — BlackHole renamed to "Amkawa Voice Mic" (built on a Mac, see build_driver.sh);
+- `drivers/AmkawaVoice.driver` — BlackHole renamed to "Amkawa Voice Mic 2ch" (built on a Mac, see build_driver.sh);
 - `drivers/BlackHole2ch.pkg` — the official, signed BlackHole 2ch installer (device "BlackHole 2ch").
 """
 import shlex
@@ -13,7 +13,7 @@ from .paths import resource_path
 
 HAL_DIR = Path("/Library/Audio/Plug-Ins/HAL")
 CUSTOM_DRIVER = "AmkawaVoice.driver"
-CUSTOM_DEVICE = "Amkawa Voice Mic"
+CUSTOM_DEVICE = "Amkawa Voice Mic 2ch"
 BLACKHOLE_PKG = "BlackHole2ch.pkg"
 BLACKHOLE_DRIVER = "BlackHole2ch.driver"
 BLACKHOLE_DEVICE = "BlackHole 2ch"

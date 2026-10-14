@@ -4,6 +4,7 @@ set -euo pipefail
 OUT="${1:?usage: build_driver.sh <output dir>}"
 BLACKHOLE_TAG="v0.6.1"
 DRIVER_NAME="AmkawaVoice"
+# BlackHole appends " <channels>ch": the device shows up as "Amkawa Voice Mic 2ch"
 DEVICE_NAME="Amkawa Voice Mic"
 BUNDLE_ID="ink.amkawa.voice.driver"
 
@@ -21,9 +22,7 @@ xcodebuild \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO \
   GCC_PREPROCESSOR_DEFINITIONS='$GCC_PREPROCESSOR_DEFINITIONS
   kNumber_Of_Channels=2
-  kHas_Driver_Name_Format=false
-  kDriver_Name=\"'"$DRIVER_NAME"'\"
-  kDevice_Name=\"'"$DEVICE_NAME"'\"
+  kDriver_Name=\"'"$DEVICE_NAME"'\"
   kManufacturer_Name=\"Amkawa\"
   kPlugIn_BundleID=\"'"$BUNDLE_ID"'\"' \
   | tail -n 5
