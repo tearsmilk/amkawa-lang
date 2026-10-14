@@ -3,14 +3,14 @@ import sys
 import traceback
 
 from PySide6.QtCore import QSize, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPalette
+from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPalette, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
-    QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider, QTabWidget, QVBoxLayout, QWidget,
+    QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from . import APP_NAME, __version__, catalog, virtual_mic
+from . import APP_NAME, __version__, catalog, tts, virtual_mic
 from .engine import AudioEngine, default_devices, is_virtual_mic, list_devices, SD_ERROR
 from .paths import resource_path
 from .settings import Settings
@@ -372,6 +372,7 @@ class MainWindow(QMainWindow):
         reset_row.addWidget(reset)
         vl.addLayout(reset_row)
         lay.addWidget(vcard)
+        lay.addWidget(self._build_tts_card())
 
         # audio routing
         acard, al = card("Звук")
@@ -458,6 +459,102 @@ class MainWindow(QMainWindow):
         lay.addWidget(dcard)
         lay.addStretch(1)
         return scroll
+
+    def _build_tts_card(self):
+        tcard, tl = card("Текст в голос", "Напишите текст — выбранный голос произнесёт его в Discord и в наушники.")
+        self.tts_text = QPlainTextEdit()
+        self.tts_text.setPlaceholderText("Например: Ня! Всем привет~  (⌘↩ — сказать)")
+        self.tts_text.setFixedHeight(84)
+        tl.addWidget(self.tts_text)
+
+        row = QHBoxLayout()
+        self.tts_voice = QComboBox()
+        self.tts_voice.setToolTip("Голос синтезатора macOS, который потом переозвучивает выбранная модель")
+        self.tts_voices = tts.list_voices()
+        for v in self.tts_voices:
+            self.tts_voice.addItem(v.label, v.name)
+        if not self.tts_voices:
+            self.tts_voice.addItem("Синтезатор речи не найден", None)
+        wanted = self.settings.get("tts_voice")
+        idx = self.tts_voice.findData(wanted) if wanted else -1
+        self.tts_voice.setCurrentIndex(max(idx, 0))
+        self.tts_voice.currentIndexChanged.connect(self._tts_settings_changed)
+        self.say_btn = QPushButton("Сказать")
+        self.say_btn.setObjectName("Accent")
+        self.say_btn.clicked.connect(self._speak)
+        stop = QPushButton("Стоп")
+        stop.clicked.connect(self.engine.player.stop)
+        row.addWidget(self.tts_voice, 1)
+        row.addWidget(self.say_btn)
+        row.addWidget(stop)
+        tl.addLayout(row)
+
+        self.tts_rate = ParamSlider("tts_rate", "Скорость речи", 0.5, 1.8, 0.05, lambda v: f"{v:.2f}×")
+        self.tts_rate.set_value(self.settings["tts_rate"])
+        self.tts_pitch = ParamSlider("tts_pitch", "Высота для озвучки", -12, 12, 1, lambda v: f"{v:+.0f} полутонов",
+                                     "Голос синтезатора уже женский, поэтому сдвиг нужен меньше, чем для микрофона")
+        self.tts_pitch.set_value(self.settings["tts_pitch"])
+        for w in (self.tts_rate, self.tts_pitch):
+            w.changed.connect(lambda k, v: self._tts_settings_changed())
+            tl.addWidget(w)
+        self.tts_duck = QCheckBox("Глушить микрофон, пока звучит текст")
+        self.tts_duck.setChecked(bool(self.settings["tts_duck"]))
+        self.tts_duck.toggled.connect(self._tts_settings_changed)
+        tl.addWidget(self.tts_duck)
+        self.engine.duck_mic = bool(self.settings["tts_duck"])
+        QShortcut(QKeySequence("Ctrl+Return"), self.tts_text, activated=self._speak)
+        self.tts_task = None
+        return tcard
+
+    def _tts_settings_changed(self, *_):
+        self.settings["tts_voice"] = self.tts_voice.currentData()
+        self.settings["tts_rate"] = self.tts_rate.value()
+        self.settings["tts_pitch"] = self.tts_pitch.value()
+        self.settings["tts_duck"] = self.tts_duck.isChecked()
+        self.engine.duck_mic = self.settings["tts_duck"]
+        self.settings.save()
+
+    def _speak(self):
+        text = self.tts_text.toPlainText().strip()
+        if not text:
+            self._set_status("Введите текст для озвучки.", "warn")
+            return
+        if self.tts_task is not None:
+            return
+        if not self.engine.output_device and not self.engine.monitor_device:
+            self._set_status("Выберите «Вывод в Discord» и/или «Наушники».", "warn")
+            return
+        voice = None if self.bypass.isChecked() else self.engine.voice
+        system_voice = self.tts_voice.currentData()
+        rate, pitch = self.tts_rate.value(), self.tts_pitch.value()
+
+        def work(progress=None):
+            audio = tts.synthesize(text, system_voice, rate)
+            return tts.revoice(audio, voice, pitch=pitch)
+
+        def done(audio):
+            self.tts_task = None
+            self.say_btn.setEnabled(True)
+            try:
+                self.engine.say(audio)
+            except Exception as exc:
+                self._set_status(f"Не удалось воспроизвести: {exc}", "warn")
+                return
+            self._set_status(f"Говорю ({len(audio) / 48000:.1f} с)", "ok")
+
+        def failed(msg):
+            self.tts_task = None
+            self.say_btn.setEnabled(True)
+            self._set_status("Озвучка не удалась: " + msg, "warn")
+
+        self.say_btn.setEnabled(False)
+        self._set_status("Готовлю речь…")
+        task = Task(work, parent=self)
+        task.done.connect(done)
+        task.failed.connect(failed)
+        task.finished.connect(task.deleteLater)
+        self.tts_task = task
+        task.start()
 
     # ---------------------------------------------------------- theme
     def _is_dark(self):

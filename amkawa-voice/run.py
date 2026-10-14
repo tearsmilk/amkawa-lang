@@ -21,6 +21,15 @@ def selftest():
         assert np.isfinite(y).all() and y.std() > 1e-3, model.id
     f0 = yin_f0(x[::3])
     assert abs(np.median(f0[f0 > 0]) - 140) < 5
+    from amkawa_voice import tts
+
+    voices = tts.list_voices()
+    print("tts voices:", [v.label for v in voices[:5]], "…" if len(voices) > 5 else "")
+    if voices:
+        speech = tts.synthesize("Привет! Hello!", voices[0].name)
+        spoken = tts.revoice(speech, SpectralVoice(**catalog.BUILTIN[0].params), pitch=3)
+        assert len(spoken) > 4800 and spoken.std() > 1e-3, "text-to-speech produced no audio"
+        print(f"tts ok: {len(spoken) / 48000:.1f} s")
     print("devices:", engine.list_devices(), engine.SD_ERROR or "")
     import PySide6.QtWidgets  # noqa: F401
     print("selftest ok")

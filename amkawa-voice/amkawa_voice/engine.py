@@ -114,6 +114,42 @@ class Ring:
             self.primed = False
 
 
+class Player:
+    """Plays one clip (text-to-speech) into every open output, each at its own pace."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.audio = None
+        self.pos = {}
+        self.keys = set()
+
+    @property
+    def active(self):
+        return self.audio is not None
+
+    def play(self, audio):
+        with self.lock:
+            self.audio = np.asarray(audio, dtype=np.float32)
+            self.pos = {k: 0 for k in self.keys}
+
+    def stop(self):
+        with self.lock:
+            self.audio = None
+
+    def read(self, key, n):
+        with self.lock:
+            if self.audio is None:
+                return None
+            p = self.pos.get(key, 0)
+            chunk = self.audio[p:p + n]
+            self.pos[key] = p + n
+            if all(self.pos.get(k, 0) >= len(self.audio) for k in self.keys):
+                self.audio = None
+        if len(chunk) < n:
+            chunk = np.pad(chunk, (0, n - len(chunk)))
+        return chunk
+
+
 class AudioEngine:
     def __init__(self):
         self.voice = Passthrough()
@@ -127,6 +163,8 @@ class AudioEngine:
         self.output_gain = 1.0
         self.gate_db = -50.0
         self.bypass = False
+        self.duck_mic = True  # mute the live voice while text-to-speech is playing
+        self.player = Player()
 
         self.in_level = 0.0
         self.out_level = 0.0
@@ -147,6 +185,35 @@ class AudioEngine:
     @property
     def running(self):
         return self._running
+
+    @property
+    def outputs_open(self):
+        return bool(self._streams)
+
+    def open_outputs(self):
+        """Open only the output devices (no microphone) so text-to-speech can play."""
+        if sd is None:
+            raise RuntimeError("Не найден аудио-драйвер PortAudio: " + SD_ERROR)
+        if self._streams:
+            return
+        try:
+            if self.output_device:
+                self._streams.append(self._open_output(self.output_device, self._out_ring, 1.0, "out"))
+            if self.monitor_device:
+                self._streams.append(self._open_output(self.monitor_device, self._mon_ring, None, "mon"))
+            for stream in self._streams:
+                stream.start()
+        except Exception:
+            self.stop()
+            raise
+        if not self._streams:
+            raise RuntimeError("Выберите «Вывод в Discord» и/или «Наушники».")
+
+    def say(self, audio):
+        """Play a ready clip (already converted to the selected voice)."""
+        if not self._streams:
+            self.open_outputs()
+        self.player.play(audio)
 
     def set_voice(self, voice):
         with self.voice_lock:
@@ -173,9 +240,9 @@ class AudioEngine:
                 device=in_idx, channels=1, samplerate=ENGINE_SR, blocksize=CALLBACK_FRAMES,
                 dtype="float32", latency="low", callback=self._on_input))
             if self.output_device:
-                self._streams.append(self._open_output(self.output_device, self._out_ring, 1.0))
+                self._streams.append(self._open_output(self.output_device, self._out_ring, 1.0, "out"))
             if self.monitor_device:
-                self._streams.append(self._open_output(self.monitor_device, self._mon_ring, None))
+                self._streams.append(self._open_output(self.monitor_device, self._mon_ring, None, "mon"))
             for stream in self._streams:
                 stream.start()
         except Exception:
@@ -194,17 +261,25 @@ class AudioEngine:
             except Exception:
                 pass
         self._streams = []
+        self.player.stop()
+        self.player.keys = set()
         if self._worker is not None:
             self._worker.join(timeout=2)
             self._worker = None
         self.in_level = self.out_level = 0.0
 
-    def _open_output(self, name, ring, fixed_volume):
+    def _open_output(self, name, ring, fixed_volume, key):
         idx = _device_index(name, "output")
         channels = min(2, sd.query_devices(idx)["max_output_channels"])
+        self.player.keys.add(key)
 
         def callback(outdata, frames, _time, _status):
             data = ring.read(frames)
+            speech = self.player.read(key, frames)
+            if speech is not None:
+                data = speech if self.duck_mic else np.clip(data + speech, -1.0, 1.0)
+                if key == "out":
+                    self.out_level = max(float(np.sqrt(np.mean(speech ** 2))), self.out_level * 0.6)
             if fixed_volume is None:
                 data = data * (self.monitor_volume if self.monitor_enabled else 0.0)
             outdata[:] = data[:, None]

@@ -54,6 +54,13 @@ QPushButton#Primary {{
 }}
 QPushButton#Primary:hover {{ background: {c['accent_hover']}; }}
 QPushButton#Primary[active="true"] {{ background: {c['text']}; color: {c['bg']}; }}
+QPushButton#Accent {{ background: {c['accent']}; color: {c['accent_text']}; border: none; font-weight: 600; }}
+QPushButton#Accent:hover {{ background: {c['accent_hover']}; }}
+QPushButton#Accent:disabled {{ background: {c['groove']}; }}
+QPlainTextEdit {{
+    background: {c['input']}; border: 1px solid {c['border']}; border-radius: 8px; padding: 6px 8px;
+}}
+QPlainTextEdit:focus {{ border: 1px solid {c['accent']}; }}
 QPushButton#Ghost {{ background: transparent; border: 1px dashed {c['border']}; color: {c['muted']}; }}
 QPushButton#Ghost:hover {{ background: {c['hover']}; color: {c['text']}; }}
 QPushButton#Link {{ background: transparent; border: none; color: {c['muted']}; padding: 4px 6px; }}

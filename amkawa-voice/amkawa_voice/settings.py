@@ -16,6 +16,10 @@ DEFAULTS = {
     "overrides": {},  # model_id -> {param: value}
     "rvc_block": 0.5,
     "theme": "system",
+    "tts_voice": None,
+    "tts_rate": 1.0,
+    "tts_pitch": 3.0,
+    "tts_duck": True,
 }
 
 

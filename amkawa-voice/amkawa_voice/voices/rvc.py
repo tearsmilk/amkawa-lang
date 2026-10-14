@@ -3,6 +3,7 @@
 Pipeline per block: 48k input window -> 16k -> ContentVec features + YIN pitch ->
 RVC synthesizer (only the tail is synthesised) -> 48k -> SOLA crossfade with the previous block.
 """
+import copy
 import threading
 
 import numpy as np
@@ -99,6 +100,14 @@ class RVCVoice(Voice):
         g = np.gcd(ENGINE_SR, self.tgt_sr)
         self.up, self.down = ENGINE_SR // g, self.tgt_sr // g
         self.reset()
+
+    def with_block(self, block_time):
+        """Copy sharing the networks but with its own buffers and block size (for offline use)."""
+        clone = copy.copy(self)
+        clone.block_size = _ms(block_time)
+        clone.total = clone.extra + clone.sola_buf + clone.sola_search + clone.block_size
+        clone.reset()
+        return clone
 
     def set_params(self, pitch=None, **_):
         if pitch is not None:
