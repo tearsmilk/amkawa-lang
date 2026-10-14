@@ -7,6 +7,10 @@ on:
       - ".github/workflows/amkawa-voice-macos.yml"
     tags:
       - "voice-v*"
+  pull_request:
+    paths:
+      - "amkawa-voice/**"
+      - ".github/workflows/amkawa-voice-macos.yml"
   workflow_dispatch:
 
 permissions:
