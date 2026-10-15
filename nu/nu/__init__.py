@@ -1,0 +1,5 @@
+"""Ню (ν) — a code editor in the spirit of VS Code, Claude-style UI, for macOS 11+ Intel."""
+APP_NAME = "Ню"
+APP_ID = "Nu"
+LOGO = "ν"
+__version__ = "1.0.0"
