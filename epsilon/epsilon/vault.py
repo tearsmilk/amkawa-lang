@@ -1,5 +1,5 @@
 """A vault is a plain folder: notes are .md files, attachments live in `attachments/`,
-saved links in `.milkys/links.json`, deleted notes go to `.trash/`. Everything stays on disk."""
+saved links in `.epsilon/links.json`, deleted notes go to `.trash/`. Everything stays on disk."""
 import datetime as dt
 import json
 import re
@@ -10,7 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ATTACHMENTS = "attachments"
-HIDDEN = {".milkys", ".trash", ".git", ".obsidian"}
+HIDDEN = {".epsilon", ".milkys", ".trash", ".git", ".obsidian"}
+META = ".epsilon"  # app data inside the vault (was ".milkys" when the app was called Milkys Hub)
 
 WIKILINK_RE = re.compile(r"(!?)\[\[([^\]|#]+)(#[^\]|]*)?(?:\|([^\]]+))?\]\]")
 TAG_RE = re.compile(r"(?<![\w#/&])#([A-Za-zА-Яа-яЁё0-9_][\wА-Яа-яЁё/-]*)")
@@ -53,7 +54,10 @@ class Vault:
         self.root = Path(root).expanduser()
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / ATTACHMENTS).mkdir(exist_ok=True)
-        (self.root / ".milkys").mkdir(exist_ok=True)
+        legacy = self.root / ".milkys"
+        if legacy.is_dir() and not (self.root / META).exists():
+            legacy.rename(self.root / META)
+        (self.root / META).mkdir(exist_ok=True)
         self._index = {}
 
     # ---------------------------------------------------------------- notes
@@ -136,7 +140,7 @@ class Vault:
 
     @property
     def _trash_meta_file(self):
-        return self.root / ".milkys" / "trash.json"
+        return self.root / META / "trash.json"
 
     def _trash_meta(self):
         try:
@@ -331,7 +335,7 @@ class Vault:
     # ---------------------------------------------------------------- links (bookmarks)
     @property
     def _links_file(self):
-        return self.root / ".milkys" / "links.json"
+        return self.root / META / "links.json"
 
     def links(self):
         try:
@@ -378,7 +382,7 @@ def _title_from_url(url):
     return f"{host} — {last}" if last else host
 
 
-WELCOME = """# Добро пожаловать в Milkys Hub ✻
+WELCOME = """# Добро пожаловать в Epsilon ε
 
 Всё хранится **локально** в папке хранилища — обычные `.md` файлы, их можно открыть любым редактором.
 
@@ -387,7 +391,7 @@ WELCOME = """# Добро пожаловать в Milkys Hub ✻
 - Теги: #идеи #работа — список тегов слева
 - Задачи — щёлкайте по квадратикам в просмотре:
   - [ ] попробовать вставить код
-  - [x] открыть Milkys Hub
+  - [x] открыть Epsilon
 - Файлы и картинки: перетащите в заметку — они скопируются в папку `attachments`
 - Ссылки (закладки) — раздел «Ссылки» слева
 - Наберите `/` в начале строки — меню блоков (как в Notion)

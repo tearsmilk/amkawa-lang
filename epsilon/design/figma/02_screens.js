@@ -1,4 +1,4 @@
-// Milkys Hub — Screens page: main window (Light + Dark) and "Links" (Light). Run after 01_ui_kit.js.
+// Epsilon — Screens page: main window (Light + Dark) and "Links" (Light). Run after 01_ui_kit.js.
 let page = figma.root.children.find(p => p.name === "Screens");
 if (!page) { page = figma.createPage(); page.name = "Screens"; }
 await figma.setCurrentPageAsync(page);
@@ -16,7 +16,7 @@ const cols = await figma.variables.getLocalVariableCollectionsAsync();
 const vars = await figma.variables.getLocalVariablesAsync("COLOR");
 const V = {};
 for (const mode of ["Light", "Dark"]) {
-  const col = cols.find(c => c.name === "Milkys Hub — " + mode);
+  const col = cols.find(c => c.name === "Epsilon — " + mode);
   if (!col) throw new Error("Run 01_ui_kit.js first (missing collection " + mode + ")");
   V[mode] = {};
   for (const v of vars) if (v.variableCollectionId === col.id) V[mode][v.name.replace("color/", "")] = v;
@@ -55,7 +55,7 @@ function sidebar(selectedNote) {
   side.strokes = [fill("border")]; side.strokeTopWeight = 0; side.strokeLeftWeight = 0; side.strokeBottomWeight = 0; side.strokeRightWeight = 1;
   side.resize(280, 860); side.primaryAxisSizingMode = "FIXED"; side.counterAxisSizingMode = "FIXED";
   const logo = al("HORIZONTAL", {name: "Logo", gap: 8, align: "CENTER"});
-  logo.appendChild(txt("✻", {size: 22, color: "accent"})); logo.appendChild(txt("Milkys Hub", {family: SERIF, size: 21}));
+  logo.appendChild(txt("ε", {family: SERIF, size: 30, color: "accent"})); logo.appendChild(txt("Epsilon", {family: SERIF, size: 21}));
   side.appendChild(logo);
   const search = al("HORIZONTAL", {name: "Search", pad: [7, 10, 7, 10], radius: 8, fill: "input", stroke: "border"});
   add(side, search, {h: "FILL"}); search.appendChild(txt("Поиск  ⇧⌘F", {color: "muted"}));
@@ -78,7 +78,7 @@ function sidebar(selectedNote) {
   side.appendChild(sectionLabel("Теги"));
   for (const [t, n] of [["работа", 4], ["идеи", 2], ["код", 2]]) side.appendChild(txt(`#${t}   ${n}`, {color: "text"}));
   const bottom = al("HORIZONTAL", {name: "Bottom"}); add(side, bottom, {h: "FILL"});
-  bottom.appendChild(txt("▣  Milkys Hub", {size: 12, color: "muted"}));
+  bottom.appendChild(txt("▣  Epsilon", {size: 12, color: "muted"}));
   const sp2 = figma.createFrame(); sp2.fills = []; sp2.resize(4, 4); bottom.appendChild(sp2); sp2.layoutGrow = 1;
   bottom.appendChild(txt(MODE === "Dark" ? "● Тёмная" : "◐ Системная", {size: 12, color: "muted"}));
   return side;
@@ -120,7 +120,7 @@ function noteScreen(name, x) {
   add(center, tabBar(["Добро пожаловать", "Проекты", "☰ Ссылки"], "Проекты"), {h: "FILL"});
   const header = al("HORIZONTAL", {name: "Note header", pad: [14, 18, 10, 28], align: "CENTER"}); add(center, header, {h: "FILL"});
   const tc = al("VERTICAL", {name: "Title", gap: 2}); header.appendChild(tc);
-  tc.appendChild(txt("Проекты", {family: SERIF, size: 22})); tc.appendChild(txt("Milkys Hub", {size: 12, color: "muted"}));
+  tc.appendChild(txt("Проекты", {family: SERIF, size: 22})); tc.appendChild(txt("Epsilon", {size: 12, color: "muted"}));
   const sp = figma.createFrame(); sp.fills = []; sp.resize(4, 4); header.appendChild(sp); sp.layoutGrow = 1;
   const seg = al("HORIZONTAL", {name: "Segmented", gap: 0, radius: 8, stroke: "border", fill: "card"}); seg.clipsContent = true;
   for (const [i, l] of ["Редактор", "Разделить", "Просмотр"].entries()) { const s = al("HORIZONTAL", {name: l, pad: [5, 12, 5, 12], fill: i === 1 ? "selected" : null}); s.appendChild(txt(l, {size: 12})); seg.appendChild(s); }
@@ -173,7 +173,7 @@ function linksScreen(x) {
   add(center, tabBar(["Проекты", "☰ Ссылки"], "☰ Ссылки"), {h: "FILL"});
   const body = al("VERTICAL", {name: "Links", gap: 12, pad: [22, 28, 20, 28]}); add(center, body, {h: "FILL", v: "FILL"});
   body.appendChild(txt("Ссылки", {family: SERIF, size: 30}));
-  body.appendChild(txt("Закладки хранятся в хранилище (.milkys/links.json). Двойной щелчок — открыть.", {color: "muted"}));
+  body.appendChild(txt("Закладки хранятся в хранилище (.epsilon/links.json). Двойной щелчок — открыть.", {color: "muted"}));
   const form = al("HORIZONTAL", {name: "Add form", gap: 8}); add(body, form, {h: "FILL"});
   for (const [ph, grow] of [["https://…", 3], ["Название (необязательно)", 2], ["теги через запятую", 2]]) {
     const inp = al("HORIZONTAL", {name: "Input", pad: [7, 10, 7, 10], radius: 8, fill: "input", stroke: "border"});
@@ -183,7 +183,7 @@ function linksScreen(x) {
   const table = al("VERTICAL", {name: "Table", gap: 0}); add(body, table, {h: "FILL"});
   const rows = [["НАЗВАНИЕ", "АДРЕС", "ТЕГИ", "ДОБАВЛЕНО"], ["Claude", "https://claude.ai", "#ai", "14.10.2026 09:12"],
     ["github.com — tearsmilk", "https://github.com/tearsmilk", "#код", "14.10.2026 09:10"],
-    ["Figma — Milkys Hub UI", "https://figma.com/design/P9vRt9…", "#дизайн", "13.10.2026 22:40"],
+    ["Figma — Epsilon UI", "https://figma.com/design/P9vRt9…", "#дизайн", "13.10.2026 22:40"],
     ["Python docs", "https://docs.python.org/3/", "#код #docs", "12.10.2026 18:05"]];
   rows.forEach((vals, r) => {
     const row = al("HORIZONTAL", {name: r ? "Row" : "Header", gap: 16, pad: [9, 10, 9, 10], fill: r ? null : "bg"});

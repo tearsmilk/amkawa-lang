@@ -1,16 +1,16 @@
-name: Milkys Hub (macOS Intel .dmg)
+name: Epsilon (macOS Intel .dmg)
 
 on:
   push:
     paths:
-      - "milkys-hub/**"
-      - ".github/workflows/milkys-hub-macos.yml"
+      - "epsilon/**"
+      - ".github/workflows/epsilon-macos.yml"
     tags:
-      - "hub-v*"
+      - "epsilon-v*"
   pull_request:
     paths:
-      - "milkys-hub/**"
-      - ".github/workflows/milkys-hub-macos.yml"
+      - "epsilon/**"
+      - ".github/workflows/epsilon-macos.yml"
   workflow_dispatch:
 
 permissions:
@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-15-intel
     defaults:
       run:
-        working-directory: milkys-hub
+        working-directory: epsilon
     env:
       PYTHON_VERSION: "3.11.9"
     steps:
@@ -41,17 +41,17 @@ jobs:
 
       - name: Build app + dmg
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/hub-v* ]]; then export APP_VERSION="${GITHUB_REF#refs/tags/hub-v}"; fi
+          if [[ "$GITHUB_REF" == refs/tags/epsilon-v* ]]; then export APP_VERSION="${GITHUB_REF#refs/tags/epsilon-v}"; fi
           PATH="$(dirname "$PYTHON"):$PATH" packaging/build_macos.sh
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MilkysHub-macOS-x64
-          path: milkys-hub/dist/*.dmg
+          name: Epsilon-macOS-x64
+          path: epsilon/dist/*.dmg
           if-no-files-found: error
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/hub-v')
+        if: startsWith(github.ref, 'refs/tags/epsilon-v')
         uses: softprops/action-gh-release@v2
         with:
-          files: milkys-hub/dist/*.dmg
+          files: epsilon/dist/*.dmg

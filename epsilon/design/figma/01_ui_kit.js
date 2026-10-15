@@ -1,7 +1,7 @@
-// Milkys Hub — UI Kit page (Figma Plugin API, run via use_figma). Re-runnable: rebuilds the page.
+// Epsilon — UI Kit page (Figma Plugin API, run via use_figma). Re-runnable: rebuilds the page.
 const page = figma.currentPage;
 page.name = "UI Kit";
-for (const c of await figma.variables.getLocalVariableCollectionsAsync()) if (c.name.startsWith("Milkys Hub")) c.remove();
+for (const c of await figma.variables.getLocalVariableCollectionsAsync()) if (c.name.startsWith("Epsilon")) c.remove();
 for (const n of [...page.children]) n.remove();
 
 const fonts = await figma.listAvailableFontsAsync();
@@ -26,7 +26,7 @@ const T = {
 const V = {Light: {}, Dark: {}};
 const colIds = {};
 for (const [mi, modeName] of ["Light", "Dark"].entries()) {
-  const col = figma.variables.createVariableCollection("Milkys Hub — " + modeName);
+  const col = figma.variables.createVariableCollection("Epsilon — " + modeName);
   col.renameMode(col.modes[0].modeId, modeName);
   colIds[modeName] = col.id;
   for (const [name, vals] of Object.entries(T)) {
@@ -93,13 +93,13 @@ function propText(component, textNode, prop, def) {
   textNode.componentPropertyReferences = {characters: component.addComponentProperty(prop, "TEXT", def)};
 }
 
-const root = al("VERTICAL", {name: "Milkys Hub — UI Kit", gap: 40, pad: 56, fill: "bg"});
+const root = al("VERTICAL", {name: "Epsilon — UI Kit", gap: 40, pad: 56, fill: "bg"});
 root.x = 0; root.y = 0;
 root.resize(1600, 100);
 root.primaryAxisSizingMode = "AUTO"; root.counterAxisSizingMode = "FIXED";
 const head = al("VERTICAL", {name: "Header", gap: 8});
-head.appendChild(txt("✻ Milkys Hub — UI Kit", {family: SERIF, size: 44}));
-head.appendChild(txt("Claude-style: тёплые поверхности, терракотовый акцент, serif-заголовки. Токены — коллекции «Milkys Hub — Light» и «Milkys Hub — Dark» с одинаковыми именами.", {size: 16, color: "muted"}));
+head.appendChild(txt("ε Epsilon — UI Kit", {family: SERIF, size: 44}));
+head.appendChild(txt("Claude-style: тёплые поверхности, терракотовый акцент, serif-заголовки. Токены — коллекции «Epsilon — Light» и «Epsilon — Dark» с одинаковыми именами.", {size: 16, color: "muted"}));
 root.appendChild(head);
 function sectionFrame(title) {
   const s = al("VERTICAL", {name: title, gap: 16});
@@ -201,7 +201,7 @@ const tasks = ["Todo", "Done"].map(s => {
   const box = figma.createRectangle(); box.resize(14, 14); box.cornerRadius = 4;
   box.fills = s === "Done" ? [fill("accent")] : []; box.strokes = [fill(s === "Done" ? "accent" : "muted")]; box.strokeWeight = 1.2;
   c.appendChild(box);
-  const t = txt(s === "Done" ? "открыть Milkys Hub" : "попробовать вставить код", {size: 14, color: s === "Done" ? "muted" : "text"});
+  const t = txt(s === "Done" ? "открыть Epsilon" : "попробовать вставить код", {size: 14, color: s === "Done" ? "muted" : "text"});
   t.name = "Label"; c.appendChild(t); return c;
 });
 const taskSet = variants(tasks, grid, {Label: "Задача"}); taskSet.name = "Task"; ids.task = taskSet.id;

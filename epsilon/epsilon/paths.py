@@ -13,12 +13,18 @@ def data_dir() -> Path:
     else:
         base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     path = base / APP_ID
+    legacy = base / "MilkysHub"  # the app was called Milkys Hub before: keep its settings
+    if not path.exists() and legacy.is_dir():
+        legacy.rename(path)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def default_vault() -> Path:
-    return Path.home() / "Documents" / "Milkys Hub"
+    legacy = Path.home() / "Documents" / "Milkys Hub"
+    if legacy.is_dir() and not (Path.home() / "Documents" / "Epsilon").exists():
+        return legacy
+    return Path.home() / "Documents" / "Epsilon"
 
 
 def resource_path(*parts: str) -> Path:

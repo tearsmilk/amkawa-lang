@@ -6,10 +6,10 @@ def selftest():
     import tempfile
     from pathlib import Path
 
-    from milkys_hub.codedetect import detect_language, looks_like_code
-    from milkys_hub.mdrender import Renderer
-    from milkys_hub.theme import LIGHT
-    from milkys_hub.vault import Vault
+    from epsilon.codedetect import detect_language, looks_like_code
+    from epsilon.mdrender import Renderer
+    from epsilon.theme import LIGHT
+    from epsilon.vault import Vault
 
     with tempfile.TemporaryDirectory() as tmp:
         v = Vault(Path(tmp) / "vault")
@@ -37,9 +37,9 @@ def selftest():
         moved, errors = v.empty_trash(mover=lambda p: (moved_to.append(p.name), p.unlink()))
         assert moved == 1 and not errors and not v.trash_items(), (moved, errors)
         if sys.platform == "darwin":  # the real macOS Trash (NSFileManager via ctypes)
-            from milkys_hub.systrash import move_to_trash
+            from epsilon.systrash import move_to_trash
 
-            probe = Path(tmp) / "milkys-trash-probe.txt"
+            probe = Path(tmp) / "epsilon-trash-probe.txt"
             probe.write_text("probe")
             move_to_trash(probe)
             assert not probe.exists(), "macOS Trash move failed"
@@ -55,6 +55,6 @@ def selftest():
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         sys.exit(selftest())
-    from milkys_hub.ui import main
+    from epsilon.ui import main
 
     sys.exit(main())

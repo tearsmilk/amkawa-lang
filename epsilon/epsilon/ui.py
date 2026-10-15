@@ -1,4 +1,4 @@
-"""Milkys Hub main window: sidebar (notes tree, tags, sections), tabbed notes, right panel."""
+"""Epsilon main window: sidebar (notes tree, tags, sections), tabbed notes, right panel."""
 import datetime as dt
 import subprocess
 import sys
@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QTextBrowser, QTreeView, QVBoxLayout, QWidget,
 )
 
-from . import APP_NAME, __version__
+from . import APP_NAME, LOGO, __version__
 from .editor import MarkdownEditor
 from .graph import GraphView
 from .mdrender import Renderer
@@ -308,7 +308,7 @@ class LinksTab(QWidget):
         title = QLabel("Ссылки")
         title.setObjectName("Title")
         lay.addWidget(title)
-        lay.addWidget(muted("Закладки хранятся в хранилище (.milkys/links.json). Двойной щелчок — открыть."))
+        lay.addWidget(muted("Закладки хранятся в хранилище (.epsilon/links.json). Двойной щелчок — открыть."))
         row = QHBoxLayout()
         self.url = QLineEdit(placeholderText="https://…")
         self.name = QLineEdit(placeholderText="Название (необязательно)")
@@ -797,8 +797,8 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(14, 18, 14, 12)
         lay.setSpacing(8)
         logo_row = QHBoxLayout()
-        spark = QLabel("✻")
-        spark.setObjectName("Spark")
+        spark = QLabel(LOGO)
+        spark.setObjectName("Epsilon")
         logo = QLabel(APP_NAME)
         logo.setObjectName("Logo")
         logo_row.addWidget(spark)
@@ -897,7 +897,7 @@ class MainWindow(QMainWindow):
         w.setObjectName("Main")
         lay = QVBoxLayout(w)
         lay.addStretch(2)
-        t = QLabel("Milkys Hub")
+        t = QLabel(f'<span style="font-style:italic; color:{self.colors["accent"]};">{LOGO}</span>&nbsp;{APP_NAME}')
         t.setObjectName("Title")
         t.setAlignment(Qt.AlignCenter)
         lay.addWidget(t)

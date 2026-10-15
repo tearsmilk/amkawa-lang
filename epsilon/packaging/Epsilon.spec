@@ -1,4 +1,4 @@
-# PyInstaller spec — builds "Milkys Hub.app" (Intel x86_64, macOS 11+).
+# PyInstaller spec — builds "Epsilon.app" (Intel x86_64, macOS 11+).
 import os
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -22,17 +22,17 @@ a = Analysis(
     ],
 )
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="MilkysHub", console=False,
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="Epsilon", console=False,
           target_arch="x86_64", codesign_identity=None)
-coll = COLLECT(exe, a.binaries, a.datas, name="MilkysHub", strip=False, upx=False)
+coll = COLLECT(exe, a.binaries, a.datas, name="Epsilon", strip=False, upx=False)
 app = BUNDLE(
     coll,
-    name="Milkys Hub.app",
-    icon=os.path.join(ROOT, "build", "MilkysHub.icns"),
-    bundle_identifier="ink.milkys.hub",
+    name="Epsilon.app",
+    icon=os.path.join(ROOT, "build", "Epsilon.icns"),
+    bundle_identifier="ink.epsilon.notes",
     version=VERSION,
     info_plist={
-        "CFBundleDisplayName": "Milkys Hub",
+        "CFBundleDisplayName": "Epsilon",
         "CFBundleShortVersionString": VERSION,
         "CFBundleVersion": VERSION,
         "LSMinimumSystemVersion": "11.0",
