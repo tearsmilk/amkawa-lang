@@ -255,5 +255,43 @@ const ct = txt("Заголовок карточки", {family: SERIF, size: 18})
 card.appendChild(txt("Карточки группируют настройки и разделы.", {size: 13, color: "muted"}));
 grid.appendChild(card); propText(card, ct, "Title", "Заголовок карточки"); ids.card = card.id;
 
+
+// ---- Calendar: day cell (variants) and task row
+const dayVariants = [["Default", null, "text", false], ["Today", null, "on-accent", true], ["Selected", "selected", "text", false],
+                     ["Other month", null, "muted", false]].map(([state, bg, numColor, today]) => {
+  const c = comp("State=" + state, "VERTICAL", {fill: bg, radius: 10, pad: [5, 6, 6, 6], gap: 6, align: "MIN"});
+  c.resize(84, 64); c.primaryAxisSizingMode = "FIXED"; c.counterAxisSizingMode = "FIXED";
+  const num = al("HORIZONTAL", {name: "Number", radius: 14, fill: today ? "accent" : null});
+  num.resize(28, 28); num.primaryAxisSizingMode = "FIXED"; num.counterAxisSizingMode = "FIXED";
+  num.primaryAxisAlignItems = "CENTER"; num.counterAxisAlignItems = "CENTER";
+  const n = txt("15", {size: 14, color: numColor}); n.name = "Day"; num.appendChild(n);
+  c.appendChild(num);
+  const dots = al("HORIZONTAL", {name: "Tasks", gap: 3, align: "CENTER"});
+  for (let i = 0; i < 2; i++) { const d = figma.createEllipse(); d.resize(6, 6); d.fills = [fill("accent")]; dots.appendChild(d); }
+  dots.appendChild(txt("2", {size: 11, style: "Semi Bold", color: "text"}));
+  if (state !== "Other month") c.appendChild(dots);
+  return c;
+});
+const daySet = variants(dayVariants, grid, {Day: "15"}); daySet.name = "Calendar day"; ids.calendarDay = daySet.id;
+
+const taskRows = ["Todo", "Done"].map(s => {
+  const c = comp("State=" + s, "HORIZONTAL", {gap: 10, pad: [6, 8, 6, 8], radius: 8, align: "MIN"});
+  c.resize(360, c.height); c.primaryAxisSizingMode = "FIXED";
+  const box = figma.createRectangle(); box.resize(15, 15); box.cornerRadius = 5;
+  box.fills = s === "Done" ? [fill("accent")] : [fill("input")]; box.strokes = [fill(s === "Done" ? "accent" : "muted")]; box.strokeWeight = 1;
+  c.appendChild(box);
+  const col = al("VERTICAL", {name: "Text", gap: 2});
+  const line = al("HORIZONTAL", {name: "Line", gap: 8, align: "CENTER"});
+  line.appendChild(txt("11:00", {size: 13, color: "muted"}));
+  line.appendChild(txt("⏫", {size: 12}));
+  const t = txt(s === "Done" ? "Иконка" : "Созвон с командой", {size: 13, color: s === "Done" ? "muted" : "text"}); t.name = "Label";
+  line.appendChild(t);
+  col.appendChild(line);
+  const src = txt("Дневник", {size: 12, color: "muted"}); src.name = "Source"; col.appendChild(src);
+  c.appendChild(col);
+  return c;
+});
+const taskRowSet = variants(taskRows, grid, {Label: "Задача", Source: "Дневник"}); taskRowSet.name = "Task row"; ids.taskRow = taskRowSet.id;
+
 await root.screenshot({scale: 0.5});
 return {rootId: root.id, colIds, fonts: {SERIF, MONO}, ids, variables: Object.keys(T).length * 2};

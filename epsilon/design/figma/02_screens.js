@@ -1,4 +1,4 @@
-// Epsilon — Screens page: main window (Light + Dark) and "Links" (Light). Run after 01_ui_kit.js.
+// Epsilon — Screens page: Main (Light/Dark), Links, Calendar (Light/Dark), Settings. Run after 01_ui_kit.js.
 let page = figma.root.children.find(p => p.name === "Screens");
 if (!page) { page = figma.createPage(); page.name = "Screens"; }
 await figma.setCurrentPageAsync(page);
@@ -194,10 +194,128 @@ function linksScreen(x) {
   return win;
 }
 
+
+function calendarScreen(x) {
+  const win = al("HORIZONTAL", {name: "Calendar — " + MODE, gap: 0, fill: "bg"});
+  win.resize(1440, 900); win.primaryAxisSizingMode = "FIXED"; win.counterAxisSizingMode = "FIXED";
+  win.cornerRadius = 12; win.clipsContent = true; win.x = x; win.y = 1000;
+  add(win, sidebar(null), {v: "FILL"});
+  const center = al("VERTICAL", {name: "Center", gap: 0, fill: "bg"}); add(win, center, {h: "FILL", v: "FILL"});
+  add(center, tabBar(["Добро пожаловать", "▦ Календарь"], "▦ Календарь"), {h: "FILL"});
+  const body = al("HORIZONTAL", {name: "Body", gap: 0}); add(center, body, {h: "FILL", v: "FILL"});
+  // month + planner
+  const left = al("VERTICAL", {name: "Month", gap: 10, pad: [20, 18, 16, 28]}); add(body, left, {h: "FILL", v: "FILL"});
+  const head = al("HORIZONTAL", {name: "Header", gap: 8, align: "CENTER"}); add(left, head, {h: "FILL"});
+  head.appendChild(txt("Октябрь 2026", {family: SERIF, size: 30}));
+  const sp = figma.createFrame(); sp.fills = []; sp.resize(4, 4); head.appendChild(sp); sp.layoutGrow = 1;
+  for (const b of ["‹", "Сегодня", "›"]) head.appendChild(button(b, "Secondary"));
+  const grid = al("VERTICAL", {name: "Grid", gap: 0}); add(left, grid, {h: "FILL"});
+  const wd = al("HORIZONTAL", {name: "Weekdays", gap: 0}); add(grid, wd, {h: "FILL"});
+  for (const d of ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]) {
+    const cell = al("HORIZONTAL", {name: d, pad: [6, 0, 6, 0]}); cell.primaryAxisAlignItems = "CENTER";
+    cell.appendChild(txt(d, {size: 11, style: "Semi Bold", color: "muted"})); add(wd, cell, {h: "FILL"});
+  }
+  const tasksOn = {13: [1, true], 15: [2, false], 16: [1, false], 17: [1, false], 20: [1, false]};
+  let day = 28;  // Sep 28 … Nov 8
+  for (let r = 0; r < 6; r++) {
+    const row = al("HORIZONTAL", {name: "Week " + (r + 1), gap: 6}); add(grid, row, {h: "FILL"});
+    for (let c = 0; c < 7; c++) {
+      const idx = r * 7 + c;
+      const inMonth = idx >= 3 && idx < 34;
+      const d = inMonth ? idx - 2 : (idx < 3 ? 28 + idx : idx - 33);
+      const isToday = inMonth && d === 15;
+      const cell = al("VERTICAL", {name: "Day " + d, pad: [5, 6, 6, 6], gap: 8, radius: 10, fill: isToday ? "selected" : null});
+      cell.resize(80, 64); cell.counterAxisSizingMode = "FIXED"; cell.primaryAxisSizingMode = "FIXED";
+      add(row, cell, {h: "FILL"});
+      const num = al("HORIZONTAL", {name: "Number", radius: 14, fill: isToday ? "accent" : null});
+      num.resize(28, 28); num.primaryAxisSizingMode = "FIXED"; num.counterAxisSizingMode = "FIXED";
+      num.primaryAxisAlignItems = "CENTER"; num.counterAxisAlignItems = "CENTER";
+      num.appendChild(txt(String(d), {size: 14, color: isToday ? "on-accent" : (inMonth ? "text" : "muted")}));
+      cell.appendChild(num);
+      const info = inMonth && tasksOn[d];
+      if (info) {
+        const dots = al("HORIZONTAL", {name: "Tasks", gap: 3, align: "CENTER"});
+        for (let i = 0; i < Math.min(info[0], 3); i++) { const e = figma.createEllipse(); e.resize(6, 6); e.fills = [fill(info[1] ? "warning" : "accent")]; dots.appendChild(e); }
+        dots.appendChild(txt(String(info[0]), {size: 11, style: "Semi Bold", color: info[1] ? "warning" : "text"}));
+        cell.appendChild(dots);
+      }
+    }
+  }
+  left.appendChild(sectionLabel("Планировщик"));
+  const groups = [["ПРОСРОЧЕНО", [["13 окт", "⏫ Оплатить интернет", "Дневник"]], "warning"],
+                  ["СЕГОДНЯ", [["15 окт  11:00", "🔼 Созвон с командой", "Дневник"], ["15 окт", "Купить молоко", "Дневник"]], "muted"],
+                  ["БЛИЖАЙШИЕ 7 ДНЕЙ", [["16 окт  19:30", "Тренировка", "Дневник"], ["17 окт  18:00", "⏫ Сдать макеты в Figma", "Дневник"]], "muted"]];
+  for (const [title, items, colr] of groups) {
+    left.appendChild(txt(title, {size: 11, style: "Semi Bold", color: colr}));
+    for (const [when, label, src] of items) {
+      const r = al("HORIZONTAL", {name: "Task", gap: 10, align: "MIN"});
+      const box = figma.createRectangle(); box.resize(15, 15); box.cornerRadius = 5; box.fills = [fill("input")]; box.strokes = [fill("muted")]; box.strokeWeight = 1;
+      r.appendChild(box);
+      const col = al("VERTICAL", {name: "Text", gap: 1});
+      col.appendChild(txt(`${when}   ${label}`, {size: 13})); col.appendChild(txt(src, {size: 12, color: "muted"}));
+      r.appendChild(col); left.appendChild(r);
+    }
+  }
+  // selected day panel
+  const right = al("VERTICAL", {name: "Day plan", gap: 10, pad: [20, 22, 16, 22], fill: "sidebar"});
+  right.strokes = [fill("border")]; right.strokeTopWeight = 0; right.strokeRightWeight = 0; right.strokeBottomWeight = 0; right.strokeLeftWeight = 1;
+  right.resize(430, 800); right.counterAxisSizingMode = "FIXED"; add(body, right, {v: "FILL"});
+  right.appendChild(txt("Четверг, 15 октября · сегодня", {family: SERIF, size: 18}));
+  right.appendChild(txt("Задач: 3, осталось: 2", {size: 12, color: "muted"}));
+  right.appendChild(txt("Открыть дневник дня", {size: 13, color: "muted"}));
+  const inp = al("HORIZONTAL", {name: "New task", pad: [7, 10, 7, 10], radius: 8, fill: "input", stroke: "border"});
+  inp.appendChild(txt("Новая задача…  (Enter — добавить)", {color: "muted"})); add(right, inp, {h: "FILL"});
+  const r2 = al("HORIZONTAL", {name: "Options", gap: 8}); add(right, r2, {h: "FILL"});
+  const tm = al("HORIZONTAL", {name: "Time", pad: [7, 10, 7, 10], radius: 8, fill: "input", stroke: "border"}); tm.appendChild(txt("⏰ 14:30", {color: "muted"})); r2.appendChild(tm);
+  const pr = al("HORIZONTAL", {name: "Priority", pad: [7, 10, 7, 10], radius: 8, fill: "input", stroke: "border"}); pr.appendChild(txt("Без приоритета")); add(r2, pr, {h: "FILL"});
+  r2.appendChild(button("Добавить", "Accent"));
+  for (const [time, label, done] of [["11:00", "🔼 Созвон с командой", false], ["", "Купить молоко", false], ["", "Иконка", true]]) {
+    const r = al("HORIZONTAL", {name: "Task", gap: 10, align: "MIN"});
+    const box = figma.createRectangle(); box.resize(15, 15); box.cornerRadius = 5;
+    box.fills = [fill(done ? "accent" : "input")]; box.strokes = [fill(done ? "accent" : "muted")]; box.strokeWeight = 1; r.appendChild(box);
+    const col = al("VERTICAL", {name: "Text", gap: 1});
+    col.appendChild(txt(`${time ? time + "   " : ""}${label}`, {size: 13, color: done ? "muted" : "text"}));
+    col.appendChild(txt(done ? "Проект Epsilon" : "Дневник", {size: 12, color: "muted"})); r.appendChild(col); right.appendChild(r);
+  }
+  return win;
+}
+function settingsScreen(x) {
+  const dlg = al("VERTICAL", {name: "Settings — " + MODE, gap: 10, pad: [24, 28, 22, 28], fill: "bg", radius: 12, stroke: "border"});
+  dlg.resize(620, 10); dlg.counterAxisSizingMode = "FIXED"; dlg.primaryAxisSizingMode = "AUTO"; dlg.x = x; dlg.y = 1000;
+  dlg.effects = [{type: "DROP_SHADOW", color: {r: 0, g: 0, b: 0, a: 0.15}, offset: {x: 0, y: 12}, radius: 40, spread: 0, visible: true, blendMode: "NORMAL"}];
+  dlg.appendChild(txt("Настройки", {family: SERIF, size: 30}));
+  dlg.appendChild(sectionLabel("Внешний вид"));
+  const row = al("HORIZONTAL", {name: "Appearance", gap: 12}); add(dlg, row, {h: "FILL"});
+  for (const [label, val] of [["Тема", "Системная"], ["Шрифт", "14 pt"], ["Новые вкладки", "Разделить"]]) {
+    const col = al("VERTICAL", {name: label, gap: 4}); add(row, col, {h: "FILL"});
+    col.appendChild(txt(label, {size: 12, color: "muted"}));
+    const f = al("HORIZONTAL", {name: "Field", pad: [7, 10, 7, 10], radius: 8, fill: "input", stroke: "border"}); f.appendChild(txt(val)); add(col, f, {h: "FILL"});
+  }
+  dlg.appendChild(sectionLabel("Хранилище"));
+  dlg.appendChild(txt("~/Documents/Epsilon", {size: 13, color: "muted"}));
+  const vr = al("HORIZONTAL", {name: "Vault actions", gap: 8}); dlg.appendChild(vr);
+  vr.appendChild(button("Показать в Finder", "Secondary")); vr.appendChild(button("Открыть другое…", "Secondary"));
+  dlg.appendChild(sectionLabel("Корзина"));
+  dlg.appendChild(txt("В корзине хранилища: 2 · 27 Б", {size: 13, color: "muted"}));
+  for (const [name, meta] of [["Черновик.md", "2026-10-15 05:11 · 19 Б"], ["Старый список.md", "2026-10-15 05:11 · 8 Б"]]) {
+    const it = al("VERTICAL", {name: "Trash item", gap: 1}); it.appendChild(txt(name)); it.appendChild(txt(meta, {size: 12, color: "muted"})); dlg.appendChild(it);
+  }
+  const tr = al("HORIZONTAL", {name: "Trash actions", gap: 8}); add(dlg, tr, {h: "FILL"});
+  tr.appendChild(button("Восстановить", "Secondary")); tr.appendChild(button("Показать папку", "Secondary"));
+  const sp = figma.createFrame(); sp.fills = []; sp.resize(4, 4); tr.appendChild(sp); sp.layoutGrow = 1;
+  tr.appendChild(button("Очистить корзину", "Accent"));
+  dlg.appendChild(txt("☐  Удалять сразу в Корзину macOS (минуя корзину хранилища)", {size: 13}));
+  dlg.appendChild(txt("«Очистить корзину» перемещает всё удалённое в Корзину macOS — там работает «Вернуть».", {size: 12, color: "muted", w: 560}));
+  return dlg;
+}
+
 const created = [];
 MODE = "Light"; created.push(noteScreen("Main — Light", 0).id);
 MODE = "Dark"; created.push(noteScreen("Main — Dark", 1440).id);
 MODE = "Light"; created.push(linksScreen(2880).id);
+MODE = "Light"; created.push(calendarScreen(0).id);
+MODE = "Dark"; created.push(calendarScreen(1520).id);
+MODE = "Light"; created.push(settingsScreen(3040).id);
 const shot = page.children[0];
 await shot.screenshot({scale: 0.5});
 return {pageId: page.id, createdNodeIds: created};
