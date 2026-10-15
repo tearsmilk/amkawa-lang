@@ -27,6 +27,23 @@ def selftest():
         assert "PYTHON" in html and "task:" in html and "tag:проект" in html and "note:Старт" in html
         assert v.graph()[1], "graph has no edges"
         assert renamed.exists()
+        # trash: delete → restore → delete → empty into the system trash
+        trashed = v.delete(a)
+        assert not a.exists() and v.trash_items()[0][1] == "Идеи.md"
+        back = v.restore(trashed)
+        assert back == a and a.exists() and not v.trash_items()
+        v.delete(a)
+        moved_to = []
+        moved, errors = v.empty_trash(mover=lambda p: (moved_to.append(p.name), p.unlink()))
+        assert moved == 1 and not errors and not v.trash_items(), (moved, errors)
+        if sys.platform == "darwin":  # the real macOS Trash (NSFileManager via ctypes)
+            from milkys_hub.systrash import move_to_trash
+
+            probe = Path(tmp) / "milkys-trash-probe.txt"
+            probe.write_text("probe")
+            move_to_trash(probe)
+            assert not probe.exists(), "macOS Trash move failed"
+            print("macOS trash ok")
     assert looks_like_code("def f(x):\n    return x * 2\n") and detect_language("SELECT * FROM t WHERE a=1;") == "sql"
     assert not looks_like_code("Сегодня хорошая погода, пойду гулять.\nА вечером почитаю книгу.")
     import PySide6.QtWidgets  # noqa: F401

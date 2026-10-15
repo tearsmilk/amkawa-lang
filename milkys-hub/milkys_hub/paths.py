@@ -30,7 +30,7 @@ def resource_path(*parts: str) -> Path:
 
 class Settings(dict):
     DEFAULTS = {"vault": None, "theme": "system", "mode": "split", "open_tabs": [], "right_panel": True,
-                "font_size": 14, "recent_vaults": []}
+                "font_size": 14, "recent_vaults": [], "delete_to_system_trash": False}
 
     def __init__(self):
         super().__init__(self.DEFAULTS)

@@ -129,14 +129,96 @@ class Vault:
             if "[[" in text and rx.search(text):
                 self.write(note, rx.sub("[[" + new, text))
 
-    def delete(self, path):
+    # ---------------------------------------------------------------- trash
+    @property
+    def trash_dir(self):
+        return self.root / ".trash"
+
+    @property
+    def _trash_meta_file(self):
+        return self.root / ".milkys" / "trash.json"
+
+    def _trash_meta(self):
+        try:
+            return json.loads(self._trash_meta_file.read_text("utf-8"))
+        except Exception:
+            return {}
+
+    def _save_trash_meta(self, meta):
+        self._trash_meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2), "utf-8")
+
+    def delete(self, path, to_system_trash=False):
+        """Move a note/folder/file to the vault trash (.trash), or straight to the system Trash."""
         path = Path(path)
-        trash = self.root / ".trash"
-        trash.mkdir(exist_ok=True)
-        dest = trash / f"{time.strftime('%Y%m%d-%H%M%S')} {path.name}"
-        shutil.move(str(path), str(dest))
         self._index.pop(path, None)
+        if to_system_trash:
+            from .systrash import move_to_trash
+
+            move_to_trash(path)
+            return None
+        self.trash_dir.mkdir(exist_ok=True)
+        dest = self.trash_dir / f"{time.strftime('%Y%m%d-%H%M%S')} {path.name}"
+        n = 2
+        while dest.exists():
+            dest = self.trash_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{n} {path.name}"
+            n += 1
+        shutil.move(str(path), str(dest))
+        meta = self._trash_meta()
+        meta[dest.name] = {"from": self.rel(path), "deleted": dt.datetime.now().isoformat(timespec="minutes")}
+        self._save_trash_meta(meta)
         return dest
+
+    def trash_items(self):
+        """[(path_in_trash, original_relative_path, deleted_at, size_bytes)] newest first."""
+        if not self.trash_dir.exists():
+            return []
+        meta = self._trash_meta()
+        items = []
+        for p in self.trash_dir.iterdir():
+            info = meta.get(p.name, {})
+            original = info.get("from") or re.sub(r"^\d{8}-\d{6}(-\d+)? ", "", p.name)
+            size = sum(f.stat().st_size for f in p.rglob("*") if f.is_file()) if p.is_dir() else p.stat().st_size
+            items.append((p, original, info.get("deleted", ""), size))
+        return sorted(items, key=lambda it: it[0].name, reverse=True)
+
+    def restore(self, trashed):
+        trashed = Path(trashed)
+        meta = self._trash_meta()
+        original = meta.get(trashed.name, {}).get("from") or re.sub(r"^\d{8}-\d{6}(-\d+)? ", "", trashed.name)
+        target = self.root / original
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            target = self.unique_path(target.parent, target.stem, target.suffix)
+        shutil.move(str(trashed), str(target))
+        meta.pop(trashed.name, None)
+        self._save_trash_meta(meta)
+        return target
+
+    def empty_trash(self, mover=None):
+        """Move everything from the vault trash to the system Trash (macOS Finder Trash).
+        Returns (moved_count, errors)."""
+        if mover is None:
+            from .systrash import move_to_trash as mover
+        moved, errors = 0, []
+        meta = self._trash_meta()
+        for p, original, _when, _size in self.trash_items():
+            try:
+                # give it back its real name so the macOS Trash shows "Note.md", not "20261015-… Note.md"
+                clean = Path(original).name
+                if clean and clean != p.name:
+                    named = p.with_name(clean)
+                    if named.exists():
+                        named = self.unique_path(p.parent, Path(clean).stem, Path(clean).suffix)
+                    p.rename(named)
+                    meta.pop(p.name, None)
+                    p = named
+                mover(p)
+                meta.pop(p.name, None)
+                moved += 1
+            except Exception as exc:
+                errors.append(f"{p.name}: {exc}")
+        self._save_trash_meta(meta)
+        return moved, errors
 
     def daily_note(self, day=None):
         day = day or dt.date.today()

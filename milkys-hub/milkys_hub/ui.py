@@ -7,9 +7,9 @@ from pathlib import Path
 from PySide6.QtCore import QDir, QSortFilterProxyModel, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QIcon, QImage, QKeySequence, QPalette, QShortcut, QTextDocument
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QButtonGroup, QDialog, QFileDialog, QFileSystemModel, QFrame,
+    QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFileSystemModel, QFrame,
     QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
-    QMenu, QMessageBox, QPushButton, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QTabWidget,
+    QMenu, QMessageBox, QPushButton, QSpinBox, QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem, QTabWidget,
     QTextBrowser, QTreeView, QVBoxLayout, QWidget,
 )
 
@@ -457,8 +457,10 @@ class FilesTab(QWidget):
         menu.addSeparator()
 
         def delete():
-            if QMessageBox.question(self, APP_NAME, f"Переместить «{p.name}» в корзину хранилища?") == QMessageBox.Yes:
-                self.win.vault.delete(p)
+            to_system = bool(self.win.settings.get("delete_to_system_trash"))
+            where = "в Корзину macOS" if to_system else "в корзину хранилища"
+            if QMessageBox.question(self, APP_NAME, f"Переместить «{p.name}» {where}?") == QMessageBox.Yes:
+                self.win.vault.delete(p, to_system_trash=to_system)
                 self.refresh()
 
         menu.addAction("Удалить", delete)
@@ -574,6 +576,140 @@ class QuickSwitcher(QDialog):
         elif self.edit.text().strip():
             self.win.open_note(self.win.vault.create_note(self.edit.text().strip()))
         self.accept()
+
+
+class SettingsDialog(QDialog):
+    """App settings: appearance, vault, and the vault trash (restore / empty into the macOS Trash)."""
+
+    def __init__(self, win):
+        super().__init__(win)
+        self.win = win
+        self.setWindowTitle("Настройки")
+        self.setMinimumSize(600, 640)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(28, 24, 28, 22)
+        lay.setSpacing(10)
+        title = QLabel("Настройки")
+        title.setObjectName("Title")
+        lay.addWidget(title)
+
+        # appearance
+        lay.addWidget(section("Внешний вид"))
+        row = QHBoxLayout()
+        self.theme = QComboBox()
+        for key, label in (("system", "Системная"), ("light", "Светлая"), ("dark", "Тёмная")):
+            self.theme.addItem(label, key)
+        self.theme.setCurrentIndex(max(0, self.theme.findData(win.settings.get("theme", "system"))))
+        self.theme.currentIndexChanged.connect(lambda: win.set_theme(self.theme.currentData()))
+        self.font_box = QSpinBox()
+        self.font_box.setRange(10, 24)
+        self.font_box.setValue(win.settings.get("font_size", 14))
+        self.font_box.setSuffix(" pt")
+        self.font_box.valueChanged.connect(win.set_font_size)
+        self.mode = QComboBox()
+        for key, label in MODES:
+            self.mode.addItem(label, key)
+        self.mode.setCurrentIndex(max(0, self.mode.findData(win.settings.get("mode", "split"))))
+        self.mode.currentIndexChanged.connect(self._mode_changed)
+        for label, w in (("Тема", self.theme), ("Шрифт", self.font_box), ("Новые вкладки", self.mode)):
+            col = QVBoxLayout()
+            col.addWidget(muted(label))
+            col.addWidget(w)
+            row.addLayout(col)
+        lay.addLayout(row)
+
+        # vault
+        lay.addSpacing(8)
+        lay.addWidget(section("Хранилище"))
+        lay.addWidget(muted(str(win.vault.root)))
+        vrow = QHBoxLayout()
+        vrow.addWidget(QPushButton("Показать в Finder", clicked=lambda: reveal_in_finder(win.vault.root)))
+        vrow.addWidget(QPushButton("Открыть другое…", clicked=self._other_vault))
+        vrow.addStretch(1)
+        lay.addLayout(vrow)
+
+        # trash
+        lay.addSpacing(8)
+        lay.addWidget(section("Корзина"))
+        self.trash_info = muted("")
+        lay.addWidget(self.trash_info)
+        self.trash_list = QListWidget()
+        self.trash_list.setObjectName("Plain")
+        self.trash_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        lay.addWidget(self.trash_list, 1)
+        trow = QHBoxLayout()
+        self.restore_btn = QPushButton("Восстановить", clicked=self._restore)
+        trow.addWidget(self.restore_btn)
+        trow.addWidget(QPushButton("Показать папку", clicked=self._reveal_trash))
+        trow.addStretch(1)
+        self.empty_btn = QPushButton("Очистить корзину", clicked=self._empty)
+        self.empty_btn.setObjectName("Accent")
+        trow.addWidget(self.empty_btn)
+        lay.addLayout(trow)
+        self.direct = QCheckBox("Удалять сразу в Корзину macOS (минуя корзину хранилища)")
+        self.direct.setChecked(bool(win.settings.get("delete_to_system_trash")))
+        self.direct.toggled.connect(self._direct_changed)
+        lay.addWidget(self.direct)
+        lay.addWidget(muted("«Очистить корзину» перемещает всё удалённое в Корзину macOS — оттуда его можно "
+                            "вернуть («Вернуть» в Finder) или удалить навсегда."))
+        close = QHBoxLayout()
+        close.addStretch(1)
+        close.addWidget(QPushButton("Готово", clicked=self.accept))
+        lay.addLayout(close)
+        self.refresh_trash()
+
+    def _mode_changed(self):
+        self.win.settings["mode"] = self.mode.currentData()
+        self.win.settings.save()
+
+    def _direct_changed(self, on):
+        self.win.settings["delete_to_system_trash"] = bool(on)
+        self.win.settings.save()
+
+    def _other_vault(self):
+        self.accept()
+        self.win._choose_vault()
+
+    def _reveal_trash(self):
+        self.win.vault.trash_dir.mkdir(exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.win.vault.trash_dir)))
+
+    def refresh_trash(self):
+        items = self.win.vault.trash_items()
+        self.trash_list.clear()
+        for path, original, when, size in items:
+            when = when.replace("T", " ") if when else ""
+            it = QListWidgetItem(f"{original}\n{when}  ·  {human_size(size)}".strip())
+            it.setData(Qt.UserRole, str(path))
+            self.trash_list.addItem(it)
+        total = sum(i[3] for i in items)
+        self.trash_info.setText(f"В корзине хранилища: {len(items)} · {human_size(total)}" if items
+                                else "Корзина хранилища пуста.")
+        self.empty_btn.setEnabled(bool(items))
+        self.restore_btn.setEnabled(bool(items))
+
+    def _restore(self):
+        selected = self.trash_list.selectedItems()
+        if not selected:
+            self.win.status.showMessage("Выберите, что восстановить", 3000)
+            return
+        restored = [self.win.vault.restore(Path(it.data(Qt.UserRole))) for it in selected]
+        self.refresh_trash()
+        self.win.refresh_side()
+        self.win.status.showMessage(f"Восстановлено: {len(restored)}", 4000)
+        if len(restored) == 1 and restored[0].suffix == ".md":
+            self.win.open_note(restored[0])
+
+    def _empty(self):
+        n = self.trash_list.count()
+        if QMessageBox.question(self, "Очистить корзину",
+                                f"Переместить {n} объект(ов) из корзины хранилища в Корзину macOS?") != QMessageBox.Yes:
+            return
+        moved, errors = self.win.vault.empty_trash()
+        self.refresh_trash()
+        if errors:
+            QMessageBox.warning(self, APP_NAME, "Не всё удалось переместить:\n" + "\n".join(errors[:10]))
+        self.win.status.showMessage(f"Перемещено в Корзину macOS: {moved}", 5000)
 
 
 class NotesModel(QSortFilterProxyModel):
@@ -745,9 +881,14 @@ class MainWindow(QMainWindow):
         self.theme_btn = QPushButton()
         self.theme_btn.setObjectName("Link")
         self.theme_btn.clicked.connect(self._cycle_theme)
+        self.settings_btn = QPushButton("⚙")
+        self.settings_btn.setObjectName("Link")
+        self.settings_btn.setToolTip("Настройки  ⌘,")
+        self.settings_btn.clicked.connect(self.open_settings)
         bottom.addWidget(self.vault_btn)
         bottom.addStretch(1)
         bottom.addWidget(self.theme_btn)
+        bottom.addWidget(self.settings_btn)
         lay.addLayout(bottom)
         return side
 
@@ -806,6 +947,7 @@ class MainWindow(QMainWindow):
             QShortcut(QKeySequence(seq), self, activated=fn)
 
         sc("Ctrl+N", lambda: self.new_note())
+        sc("Ctrl+,", self.open_settings)
         sc("Ctrl+O", lambda: QuickSwitcher(self).exec())
         sc("Ctrl+Shift+F", lambda: self.open_search(""))
         sc("Ctrl+W", lambda: self.close_tab(self.tabs.currentIndex()))
@@ -1058,8 +1200,9 @@ class MainWindow(QMainWindow):
     def delete_path(self, path):
         path = Path(path)
         what = "папку" if path.is_dir() else "заметку"
-        if QMessageBox.question(self, APP_NAME, f"Переместить {what} «{path.name}» в корзину хранилища (.trash)?") \
-                != QMessageBox.Yes:
+        to_system = bool(self.settings.get("delete_to_system_trash"))
+        where = "в Корзину macOS" if to_system else "в корзину хранилища"
+        if QMessageBox.question(self, APP_NAME, f"Переместить {what} «{path.name}» {where}?") != QMessageBox.Yes:
             return
         for i in reversed(range(self.tabs.count())):
             tab = self.tabs.widget(i)
@@ -1067,7 +1210,10 @@ class MainWindow(QMainWindow):
                 tab.save_timer.stop()
                 self.tabs.removeTab(i)
                 tab.deleteLater()
-        self.vault.delete(path)
+        try:
+            self.vault.delete(path, to_system_trash=to_system)
+        except Exception as exc:
+            QMessageBox.warning(self, APP_NAME, str(exc))
         self._update_center()
         self._save_open_tabs()
         self.refresh_side()
@@ -1146,6 +1292,17 @@ class MainWindow(QMainWindow):
         tab = self.current_tab()
         if tab is not None and tab.kind == "note" and self.isActiveWindow():
             tab.reload_if_changed()
+
+    def open_settings(self):
+        SettingsDialog(self).exec()
+
+    def set_theme(self, mode):
+        self.settings["theme"] = mode
+        self.settings.save()
+        self.apply_theme()
+
+    def set_font_size(self, size):
+        self._font_delta(size - self.settings.get("font_size", 14))
 
     def _vault_menu(self):
         menu = QMenu(self)

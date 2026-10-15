@@ -70,11 +70,11 @@ QPushButton#Ghost:hover {{ background: {c['hover']}; color: {c['text']}; }}
 QPushButton#Link {{ background: transparent; border: none; color: {c['muted']}; padding: 4px 6px; }}
 QPushButton#Link:hover {{ color: {c['accent']}; }}
 
-QComboBox, QLineEdit, QDoubleSpinBox {{
+QComboBox, QLineEdit, QDoubleSpinBox, QSpinBox {{
     background: {c['input']}; border: 1px solid {c['border']}; border-radius: 8px; padding: 6px 10px;
     min-height: 18px;
 }}
-QComboBox:focus, QLineEdit:focus, QDoubleSpinBox:focus {{ border: 1px solid {c['accent']}; }}
+QComboBox:focus, QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus {{ border: 1px solid {c['accent']}; }}
 QComboBox::drop-down {{ border: none; width: 22px; }}
 QComboBox QAbstractItemView {{
     background: {c['card']}; border: 1px solid {c['border']}; selection-background-color: {c['selected']};
