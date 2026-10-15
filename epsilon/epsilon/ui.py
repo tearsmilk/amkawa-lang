@@ -14,11 +14,13 @@ from PySide6.QtWidgets import (
 )
 
 from . import APP_NAME, LOGO, __version__
+from .calendar_view import CalendarTab, notify
 from .editor import MarkdownEditor
 from .graph import GraphView
 from .mdrender import Renderer
 from .paths import Settings, default_vault, resource_path
 from .theme import DARK, LIGHT, stylesheet
+from .tasks import TaskIndex
 from .vault import ATTACHMENTS, Vault
 
 MODES = [("edit", "Редактор"), ("split", "Разделить"), ("read", "Просмотр")]
@@ -743,6 +745,8 @@ class MainWindow(QMainWindow):
         root = vault_path or self.settings.get("vault") or default_vault()
         self.vault = Vault(root)
         welcome = self.vault.ensure_welcome()
+        self.task_index = TaskIndex(self.vault)
+        self._reminded = set()
         self.settings["vault"] = str(self.vault.root)
         recent = [v for v in self.settings.get("recent_vaults", []) if v != str(self.vault.root)]
         self.settings["recent_vaults"] = [str(self.vault.root)] + recent[:7]
@@ -787,6 +791,9 @@ class MainWindow(QMainWindow):
         self.refresh_side()
         self.focus_timer = QTimer(self, interval=2000, timeout=self._poll_external)
         self.focus_timer.start()
+        self.reminder_timer = QTimer(self, interval=30000, timeout=self._check_reminders)
+        self.reminder_timer.start()
+        QTimer.singleShot(3000, self._check_reminders)
 
     # ------------------------------------------------------------ building
     def _build_sidebar(self):
@@ -819,7 +826,7 @@ class MainWindow(QMainWindow):
         actions.addWidget(QPushButton("Сегодня", clicked=lambda: self.open_note(self.vault.daily_note())))
         lay.addLayout(actions)
 
-        for icon, text, fn in (("☰", "Ссылки", self.open_links), ("▤", "Файлы", self.open_files),
+        for icon, text, fn in (("▦", "Календарь", self.open_calendar), ("☰", "Ссылки", self.open_links), ("▤", "Файлы", self.open_files),
                                ("◎", "Граф", self.open_graph), ("⌕", "Поиск", lambda: self.open_search(""))):
             b = QPushButton(f"{icon}   {text}")
             b.setObjectName("NavButton")
@@ -949,6 +956,7 @@ class MainWindow(QMainWindow):
         sc("Ctrl+N", lambda: self.new_note())
         sc("Ctrl+,", self.open_settings)
         sc("Ctrl+O", lambda: QuickSwitcher(self).exec())
+        sc("Ctrl+Shift+C", self.open_calendar)
         sc("Ctrl+Shift+F", lambda: self.open_search(""))
         sc("Ctrl+W", lambda: self.close_tab(self.tabs.currentIndex()))
         sc("Ctrl+E", self._cycle_mode)
@@ -980,7 +988,7 @@ class MainWindow(QMainWindow):
             tab = self.tabs.widget(i)
             if tab.kind == "note":
                 tab.apply_colors(self.colors)
-            elif tab.kind == "graph":
+            elif tab.kind in ("graph", "calendar"):
                 tab.refresh()
 
     def _cycle_theme(self):
@@ -1019,7 +1027,7 @@ class MainWindow(QMainWindow):
         self._update_center()
         return idx
 
-    def open_note(self, path):
+    def open_note(self, path, line=None):
         path = Path(path)
         if path.suffix.lower() != ".md":
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
@@ -1027,6 +1035,8 @@ class MainWindow(QMainWindow):
         idx = self._find_tab("note", path)
         if idx >= 0:
             self.tabs.setCurrentIndex(idx)
+            if line is not None:
+                self._goto_line(self.tabs.widget(idx), line)
             return
         tab = NoteTab(self, path, self.settings.get("mode", "split"))
         tab.open_target.connect(self.open_target)
@@ -1036,6 +1046,21 @@ class MainWindow(QMainWindow):
         tab.saved.connect(lambda _p: self._note_saved())
         self._add_tab(tab, path.stem)
         self._save_open_tabs()
+        if line is not None:
+            self._goto_line(tab, line)
+
+    def _goto_line(self, tab, line):
+        from PySide6.QtGui import QTextCursor
+
+        if tab.mode == "read":
+            tab.set_mode("split")
+        block = tab.editor.document().findBlockByNumber(int(line))
+        if block.isValid():
+            c = QTextCursor(block)
+            c.movePosition(QTextCursor.EndOfBlock)
+            tab.editor.setTextCursor(c)
+            tab.editor.centerCursor()
+            tab.editor.setFocus()
 
     def open_target(self, name):
         path = self.vault.resolve(name)
@@ -1063,6 +1088,34 @@ class MainWindow(QMainWindow):
     def open_files(self):
         self._singleton("files", lambda: FilesTab(self), "▤ Файлы")
 
+    def open_calendar(self):
+        self._singleton("calendar", lambda: CalendarTab(self), "▦ Календарь")
+
+    def reload_open_notes(self):
+        """Pick up edits made to note files outside the editor (e.g. ticking a task in the calendar)."""
+        for i in range(self.tabs.count()):
+            tab = self.tabs.widget(i)
+            if tab.kind == "note" and not tab.save_timer.isActive() and tab.path.exists():
+                if self.vault.read(tab.path) != tab.editor.toPlainText():
+                    pos = tab.editor.textCursor().position()
+                    tab.load()
+                    c = tab.editor.textCursor()
+                    c.setPosition(min(pos, len(tab.editor.toPlainText())))
+                    tab.editor.setTextCursor(c)
+
+    def _check_reminders(self):
+        now = dt.datetime.now()
+        try:
+            due = [t for t in self.task_index.on(now.date()) if t.time and not t.done]
+        except Exception:
+            return
+        for t in due:
+            when = t.when
+            if when <= now < when + dt.timedelta(minutes=5) and t.key not in self._reminded:
+                self._reminded.add(t.key)
+                notify("Epsilon — " + t.time.strftime("%H:%M"), t.text)
+                self.status.showMessage(f"⏰ {t.time.strftime('%H:%M')}  {t.text}", 15000)
+
     def open_graph(self):
         self._singleton("graph", lambda: GraphTab(self), "◎ Граф")
 
@@ -1089,6 +1142,10 @@ class MainWindow(QMainWindow):
     def _tab_changed(self, _i):
         self.refresh_side()
         tab = self.current_tab()
+        # outline/backlinks only make sense next to a note
+        self.right.setVisible(bool(self.settings.get("right_panel", True)) and (tab is None or tab.kind == "note"))
+        if tab is not None and tab.kind == "calendar":
+            tab.refresh()
         if tab is not None and tab.kind == "note":
             tab.reload_if_changed()
             path = tab.path
@@ -1121,8 +1178,9 @@ class MainWindow(QMainWindow):
         self.settings.save()
 
     def _toggle_right(self):
-        self.right.setVisible(not self.right.isVisible())
-        self.settings["right_panel"] = self.right.isVisible()
+        self.settings["right_panel"] = not self.settings.get("right_panel", True)
+        tab = self.current_tab()
+        self.right.setVisible(self.settings["right_panel"] and (tab is None or tab.kind == "note"))
         self.settings.save()
 
     # ------------------------------------------------------------ side panels
@@ -1132,6 +1190,9 @@ class MainWindow(QMainWindow):
         self.side_timer.start()
 
     def refresh_side(self):
+        cal = self._find_tab("calendar")
+        if cal >= 0 and self.tabs.currentIndex() != cal:
+            self.tabs.widget(cal).refresh()
         tags = self.vault.tags()
         self.tag_list.clear()
         for t, n in list(tags.items())[:200]:

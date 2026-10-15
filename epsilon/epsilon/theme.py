@@ -137,6 +137,10 @@ QMenu::item {{ padding: 6px 18px 6px 10px; border-radius: 6px; }}
 QMenu::item:selected {{ background: {c['selected']}; color: {c['text']}; }}
 QMenu::separator {{ height: 1px; background: {c['border']}; margin: 4px 6px; }}
 QSplitter::handle {{ background: {c['border']}; }}
+QListWidget::indicator, QTreeView::indicator {{
+    width: 15px; height: 15px; border-radius: 5px; border: 1px solid {c['muted']}; background: {c['input']};
+}}
+QListWidget::indicator:checked, QTreeView::indicator:checked {{ background: {c['accent']}; border: 1px solid {c['accent']}; }}
 QPlainTextEdit#Editor {{ padding: 0; }}
 QToolTip {{ background: {c['card']}; color: {c['text']}; border: 1px solid {c['border']}; padding: 4px; }}
 """

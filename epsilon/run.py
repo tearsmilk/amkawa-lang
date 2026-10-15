@@ -36,6 +36,26 @@ def selftest():
         moved_to = []
         moved, errors = v.empty_trash(mover=lambda p: (moved_to.append(p.name), p.unlink()))
         assert moved == 1 and not errors and not v.trash_items(), (moved, errors)
+        # tasks / calendar
+        import datetime as dt
+
+        from epsilon.tasks import TaskIndex
+
+        idx = TaskIndex(v)
+        day = dt.date(2026, 10, 20)
+        idx.add("Позвонить", day, dt.time(14, 30), 3)
+        v.create_note("План", text="- [ ] сдать отчёт 📅 2026-10-21 🔼\n- [x] готово 📅 2026-10-20\n```\n- [ ] не задача\n```\n- [ ] без даты\n")
+        on = idx.on(day)
+        assert [t.text for t in on] == ["Позвонить", "готово"], [t.text for t in on]
+        assert on[0].time == dt.time(14, 30) and on[0].priority == 3
+        assert [t.text for t in idx.on(day + dt.timedelta(days=1))] == ["сдать отчёт"]
+        assert "без даты" in [t.text for t in idx.undated()] and "не задача" not in [t.text for t in idx.all()]
+        idx.toggle(on[0])
+        assert idx.on(day)[0].done
+        idx.reschedule(idx.on(day + dt.timedelta(days=1))[0], day)
+        assert len(idx.on(day)) == 3
+        idx.delete(next(t for t in idx.on(day) if t.text == "готово"))
+        assert len(idx.on(day)) == 2
         if sys.platform == "darwin":  # the real macOS Trash (NSFileManager via ctypes)
             from epsilon.systrash import move_to_trash
 
