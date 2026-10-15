@@ -185,6 +185,7 @@ hr {{ border: none; height: 1px; background-color: {c['border']}; }}
             if not m:
                 return None
             path = self.resolve(m.group(1).strip())
+            path = Path(path).resolve() if path is not None else None
             embed, title = True, m.group(2)
         if path is None or Path(path).suffix.lower() == ".md":
             return None
@@ -241,8 +242,10 @@ hr {{ border: none; height: 1px; background-color: {c['border']}; }}
     def _wikilink(self, m):
         embed, target, alias = m.group(1), m.group(2).strip(), m.group(4)
         path = self.resolve(target)
-        if embed and path is not None and Path(path).suffix.lower() in IMAGE_EXT:
-            self.attachments.append(Path(path))
+        if path is not None:
+            path = Path(path).resolve()  # same form as Markdown links (macOS: /var → /private/var)
+        if embed and path is not None and path.suffix.lower() in IMAGE_EXT:
+            self.attachments.append(path)
             return self._slot(f'<a href="{attach_href(path)}"><img src="{Path(path).as_uri()}" alt="{html.escape(target)}"></a>')
         if path is not None and Path(path).suffix.lower() != ".md":
             label = html.escape(alias or Path(path).name)

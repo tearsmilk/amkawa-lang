@@ -73,8 +73,9 @@ def selftest():
                                            "текст ![[fun.gif]] и [[clip.mp4]]\n")
         r = Renderer(LIGHT, v.resolve, base_dir=note.parent)
         html = r.render(v.read(note))
+        clip, anim = clip.resolve(), anim.resolve()  # macOS temp dir: /var → /private/var
         assert "▶&nbsp;Смотреть" in html and "Видео · MP4" in html and anim.as_uri() in html, html
-        assert "attach:" in html and "reveal:" in html and r.attachments[:2] == [clip.resolve(), anim.resolve()]
+        assert "attach:" in html and "reveal:" in html and r.attachments[:2] == [clip, anim]
         if sys.platform == "darwin":  # the real macOS Trash (NSFileManager via ctypes)
             from epsilon.systrash import move_to_trash
 
