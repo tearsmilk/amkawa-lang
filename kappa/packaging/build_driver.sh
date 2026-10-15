@@ -1,12 +1,12 @@
 #!/bin/bash
-# Build the "Amkawa Voice Mic" virtual audio device: BlackHole (GPL-3.0) renamed at compile time.
+# Build the "Kappa Mic" virtual audio device: BlackHole (GPL-3.0) renamed at compile time.
 set -euo pipefail
 OUT="${1:?usage: build_driver.sh <output dir>}"
 BLACKHOLE_TAG="v0.6.1"
-DRIVER_NAME="AmkawaVoice"
-# BlackHole appends " <channels>ch": the device shows up as "Amkawa Voice Mic 2ch"
-DEVICE_NAME="Amkawa Voice Mic"
-BUNDLE_ID="ink.amkawa.voice.driver"
+DRIVER_NAME="KappaVoice"
+# BlackHole appends " <channels>ch": the device shows up as "Kappa Mic 2ch"
+DEVICE_NAME="Kappa Mic"
+BUNDLE_ID="ink.kappa.voice.driver"
 
 # xcodebuild splits GCC_PREPROCESSOR_DEFINITIONS on spaces, so escape them inside the name
 DEVICE_NAME_ESC="${DEVICE_NAME// /\\ }"
@@ -26,7 +26,7 @@ xcodebuild \
   GCC_PREPROCESSOR_DEFINITIONS='$GCC_PREPROCESSOR_DEFINITIONS
   kNumber_Of_Channels=2
   kDriver_Name=\"'"$DEVICE_NAME_ESC"'\"
-  kManufacturer_Name=\"Amkawa\"
+  kManufacturer_Name=\"Kappa\"
   kPlugIn_BundleID=\"'"$BUNDLE_ID"'\"' \
   > "$WORK/xcodebuild.log" 2>&1 || { grep -E "error:|note:" "$WORK/xcodebuild.log" | head -n 40; tail -n 20 "$WORK/xcodebuild.log"; exit 1; }
 tail -n 3 "$WORK/xcodebuild.log"

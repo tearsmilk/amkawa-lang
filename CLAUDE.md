@@ -1,6 +1,6 @@
 # Repo notes for Claude
 
-- `amkawa-voice/` — Amkawa Voice (macOS voice changer), `epsilon/` — Epsilon (notes/calendar app, formerly Milkys Hub),
+- `kappa/` — Каппа / Kappa (κ, macOS anime voice changer, formerly Amkawa Voice), `epsilon/` — Epsilon (notes/calendar app, formerly Milkys Hub),
   `nu/` — Ню / Nu (ν, VS Code-like code editor with a pty terminal), `zeta/` — Дзета / Zeta (ζ, Aseprite-like pixel-art
   editor, native .aseprite read/write), `delta/` — Дельта / Delta (δ, manga / character painting app with pressure
   brushes, layers, manga tools and After Effects-style keyframe animation). All target macOS 11+ Intel x64 and are built into `.dmg` by `.github/workflows/*-macos.yml` (self-test included).

@@ -1,16 +1,16 @@
-name: Amkawa Voice (macOS Intel .dmg)
+name: Каппа — Kappa (macOS Intel .dmg)
 
 on:
   push:
     paths:
-      - "amkawa-voice/**"
-      - ".github/workflows/amkawa-voice-macos.yml"
+      - "kappa/**"
+      - ".github/workflows/kappa-macos.yml"
     tags:
-      - "voice-v*"
+      - "kappa-v*"
   pull_request:
     paths:
-      - "amkawa-voice/**"
-      - ".github/workflows/amkawa-voice-macos.yml"
+      - "kappa/**"
+      - ".github/workflows/kappa-macos.yml"
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
     runs-on: macos-15-intel
     defaults:
       run:
-        working-directory: amkawa-voice
+        working-directory: kappa
     env:
       PYTHON_VERSION: "3.11.9"
     steps:
@@ -43,17 +43,17 @@ jobs:
 
       - name: Build app + dmg
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/voice-v* ]]; then export APP_VERSION="${GITHUB_REF#refs/tags/voice-v}"; fi
+          if [[ "$GITHUB_REF" == refs/tags/kappa-v* ]]; then export APP_VERSION="${GITHUB_REF#refs/tags/kappa-v}"; fi
           PATH="$(dirname "$PYTHON"):$PATH" packaging/build_macos.sh
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AmkawaVoice-macOS-x64
-          path: amkawa-voice/dist/*.dmg
+          name: Kappa-macOS-x64
+          path: kappa/dist/*.dmg
           if-no-files-found: error
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/voice-v')
+        if: startsWith(github.ref, 'refs/tags/kappa-v')
         uses: softprops/action-gh-release@v2
         with:
-          files: amkawa-voice/dist/*.dmg
+          files: kappa/dist/*.dmg

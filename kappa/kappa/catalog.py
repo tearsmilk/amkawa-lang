@@ -101,7 +101,7 @@ def _ssl_context():
 
 def download(url, dest: Path, progress=None, expected_size=None):
     """Download `url` to `dest` atomically. progress(done_bytes, total_bytes)."""
-    req = urllib.request.Request(url, headers={"User-Agent": "AmkawaVoice/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Kappa/1.0"})
     tmp = dest.with_suffix(dest.suffix + ".part")
     with urllib.request.urlopen(req, context=_ssl_context(), timeout=60) as resp, open(tmp, "wb") as fh:
         total = int(resp.headers.get("Content-Length") or 0) or (expected_size or 0)
@@ -144,7 +144,7 @@ def _resolve_hf_url(url):
     if len(parts) >= 2:  # repo page: pick the best file via the API
         repo = "/".join(parts[:2])
         api = f"https://huggingface.co/api/models/{repo}"
-        req = urllib.request.Request(api, headers={"User-Agent": "AmkawaVoice/1.0"})
+        req = urllib.request.Request(api, headers={"User-Agent": "Kappa/1.0"})
         with urllib.request.urlopen(req, context=_ssl_context(), timeout=30) as resp:
             files = [s["rfilename"] for s in json.load(resp).get("siblings", [])]
         candidates = [f for f in files if f.lower().endswith(".pth") and not _is_training_ckpt(f)]

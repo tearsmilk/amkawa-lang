@@ -16,7 +16,7 @@ else:
     SD_ERROR = ""
 
 CALLBACK_FRAMES = 480  # 10 ms
-VIRTUAL_MIC_HINTS = ("amkawa", "blackhole", "loopback", "soundflower", "vb-cable", "cable input")
+VIRTUAL_MIC_HINTS = ("kappa", "amkawa", "blackhole", "loopback", "soundflower", "vb-cable", "cable input")
 
 
 def list_devices():

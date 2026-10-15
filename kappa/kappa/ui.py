@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit, QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from . import APP_NAME, __version__, catalog, tts, virtual_mic
+from . import APP_NAME, LOGO, __version__, catalog, tts, virtual_mic
 from .engine import AudioEngine, default_devices, is_virtual_mic, list_devices, SD_ERROR
 from .paths import resource_path
 from .settings import Settings
@@ -283,8 +283,8 @@ class MainWindow(QMainWindow):
         lay.setSpacing(10)
 
         logo_row = QHBoxLayout()
-        spark = QLabel("✻")
-        spark.setObjectName("Spark")
+        spark = QLabel(LOGO)
+        spark.setObjectName("Kappa")
         logo = QLabel(APP_NAME)
         logo.setObjectName("Logo")
         logo_row.addWidget(spark)
@@ -865,7 +865,12 @@ class MainWindow(QMainWindow):
     def refresh_driver_status(self):
         installed = virtual_mic.is_installed()
         others = [o for o in list_devices()[1] if is_virtual_mic(o)]
-        if installed or any(virtual_mic.device_name() in o for o in others):
+        if virtual_mic.needs_update():
+            self.driver_status.setText("Установлен старый микрофон «Amkawa Voice Mic 2ch». Обновите его до «Kappa Mic 2ch» "
+                                       "и выберите новое устройство в Discord.")
+            self.driver_status.setObjectName("StatusWarn")
+            self.driver_btn.setText("Обновить виртуальный микрофон")
+        elif installed or any(virtual_mic.device_name() in o for o in others):
             self.driver_status.setText(f"✓ Виртуальный микрофон «{virtual_mic.device_name()}» установлен.")
             self.driver_status.setObjectName("StatusOk")
             self.driver_btn.setText("Удалить виртуальный микрофон")
@@ -885,7 +890,9 @@ class MainWindow(QMainWindow):
         self.engine.stop()
         self._update_run_button()
         try:
-            if virtual_mic.is_installed():
+            if virtual_mic.needs_update():
+                virtual_mic.install()  # replaces the old Amkawa Voice driver
+            elif virtual_mic.is_installed():
                 virtual_mic.uninstall()
             else:
                 virtual_mic.install()

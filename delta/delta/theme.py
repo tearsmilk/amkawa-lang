@@ -1,4 +1,4 @@
-"""Claude-like look (shared with Amkawa Voice, Epsilon, Ню and Дзета): ivory / charcoal, terracotta accent, serif headings."""
+"""Claude-like look (shared with Каппа, Epsilon, Ню and Дзета): ivory / charcoal, terracotta accent, serif headings."""
 
 LIGHT = dict(
     name="light",

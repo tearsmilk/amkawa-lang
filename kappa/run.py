@@ -6,11 +6,11 @@ def selftest():
     """Headless check used by CI on the built app: every engine imports and produces audio."""
     import numpy as np
 
-    from amkawa_voice import catalog, engine
-    from amkawa_voice.voices.dsp import SpectralVoice
-    from amkawa_voice.voices.pitch import yin_f0
-    from amkawa_voice.voices.rvc_pack import models  # noqa: F401  (torch + RVC net import)
-    from amkawa_voice.voices.hubert import ContentVec
+    from kappa import catalog, engine
+    from kappa.voices.dsp import SpectralVoice
+    from kappa.voices.pitch import yin_f0
+    from kappa.voices.rvc_pack import models  # noqa: F401  (torch + RVC net import)
+    from kappa.voices.hubert import ContentVec
 
     ContentVec()
     t = np.arange(48000) / 48000
@@ -21,7 +21,7 @@ def selftest():
         assert np.isfinite(y).all() and y.std() > 1e-3, model.id
     f0 = yin_f0(x[::3])
     assert abs(np.median(f0[f0 > 0]) - 140) < 5
-    from amkawa_voice import tts
+    from kappa import tts
 
     voices = tts.list_voices()
     print("tts voices:", [v.label for v in voices[:5]], "…" if len(voices) > 5 else "")
@@ -39,6 +39,6 @@ def selftest():
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         sys.exit(selftest())
-    from amkawa_voice.ui import main
+    from kappa.ui import main
 
     sys.exit(main())

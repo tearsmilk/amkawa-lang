@@ -1,11 +1,11 @@
-"""Build "Amkawa Voice.app" + .dmg for macOS 11+ / Intel x86_64 WITHOUT a Mac.
+"""Build "Kappa.app" + .dmg for macOS 11+ / Intel x86_64 WITHOUT a Mac.
 
 The bundle is assembled from prebuilt pieces, nothing is compiled:
 - python-build-standalone CPython 3.11 for x86_64-apple-darwin (requires macOS 10.9+);
 - macOS x86_64 wheels of the dependencies (pip --platform);
 - the official signed BlackHole 2ch installer as the virtual microphone.
 The Python binary itself is the bundle's main executable, so macOS attributes microphone
-access to "Amkawa Voice". `sitecustomize.py` starts the app when that binary is launched.
+access to "Kappa". `sitecustomize.py` starts the app when that binary is launched.
 
 Host needs: python3 + pip, Pillow, macholib, xorriso, and the `dmg` tool from libdmg-hfsplus.
 Usage: python3 packaging/build_dmg_portable.py --dmg-tool /path/to/dmg [--out dist]
@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from amkawa_voice import APP_NAME, __version__  # noqa: E402
+from kappa import APP_NAME, __version__  # noqa: E402
 
 PYTHON_URL = ("https://github.com/astral-sh/python-build-standalone/releases/download/20241016/"
               "cpython-3.11.10+20241016-x86_64-apple-darwin-install_only.tar.gz")
@@ -40,19 +40,19 @@ QT_MODULES = {"QtCore", "QtGui", "QtWidgets"}
 MIN_MACOS = (11, 0)
 
 SITECUSTOMIZE = '''\
-# Starts Amkawa Voice when the bundle's main executable (this Python) is launched from Finder.
+# Starts Kappa when the bundle's main executable (this Python) is launched from Finder.
 import os as _os
 import sys as _sys
 
-if _sys.executable.endswith("/Contents/MacOS/AmkawaVoice") and _sys.argv in ([], [""]) and \\
-        not _os.environ.get("AMKAWA_PLAIN_PYTHON"):
+if _sys.executable.endswith("/Contents/MacOS/Kappa") and _sys.argv in ([], [""]) and \\
+        not _os.environ.get("KAPPA_PLAIN_PYTHON"):
     _sys.argv = [_sys.executable] + _sys.argv[1:]
     _sys.dont_write_bytecode = True
-    if _os.environ.get("AMKAWA_SELFTEST"):
+    if _os.environ.get("KAPPA_SELFTEST"):
         import run as _run
         _code = _run.selftest()
     else:
-        from amkawa_voice.ui import main as _main
+        from kappa.ui import main as _main
         _code = _main()
     _sys.stdout.flush()
     _os._exit(_code or 0)
@@ -189,13 +189,13 @@ def main():
     (contents / "MacOS").mkdir(parents=True)
     (contents / "Resources" / "drivers").mkdir(parents=True)
 
-    # 1. Python runtime: Contents/MacOS/AmkawaVoice + Contents/lib (binary links @executable_path/../lib)
+    # 1. Python runtime: Contents/MacOS/Kappa + Contents/lib (binary links @executable_path/../lib)
     py_tgz = fetch(PYTHON_URL, cache / "python.tar.gz")
     with tarfile.open(py_tgz) as tar:
         tar.extractall(work / "py", filter="tar")
     shutil.copytree(work / "py" / "python" / "lib", contents / "lib", symlinks=True)
-    shutil.copy2(work / "py" / "python" / "bin" / "python3.11", contents / "MacOS" / "AmkawaVoice")
-    os.chmod(contents / "MacOS" / "AmkawaVoice", 0o755)
+    shutil.copy2(work / "py" / "python" / "bin" / "python3.11", contents / "MacOS" / "Kappa")
+    os.chmod(contents / "MacOS" / "Kappa", 0o755)
     prune_python(contents / "lib")
 
     # 2. dependencies (macOS x86_64 wheels) + the app itself
@@ -205,18 +205,18 @@ def main():
                     "--python-version", "3.11", "--implementation", "cp", "--abi", "cp311",
                     "--cache-dir", str(cache / "pip"), *WHEELS], check=True)
     prune_site(site)
-    shutil.copytree(ROOT / "amkawa_voice", site / "amkawa_voice",
+    shutil.copytree(ROOT / "kappa", site / "kappa",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     shutil.copy2(ROOT / "run.py", site / "run.py")
     shutil.copytree(ROOT / "assets", site / "assets")
     (site / "sitecustomize.py").write_text(SITECUSTOMIZE)
 
     # 3. resources: icon, virtual mic installer, licenses
-    make_icns(ROOT / "assets" / "icon.png", contents / "Resources" / "AmkawaVoice.icns")
+    make_icns(ROOT / "assets" / "icon.png", contents / "Resources" / "Kappa.icns")
     fetch(BLACKHOLE_URL, cache / "BlackHole2ch.pkg", BLACKHOLE_SHA256)
     shutil.copy2(cache / "BlackHole2ch.pkg", contents / "Resources" / "drivers" / "BlackHole2ch.pkg")
     (contents / "Resources" / "licenses").mkdir()
-    shutil.copy2(ROOT / "amkawa_voice" / "voices" / "rvc_pack" / "LICENSE-RVC",
+    shutil.copy2(ROOT / "kappa" / "voices" / "rvc_pack" / "LICENSE-RVC",
                  contents / "Resources" / "licenses" / "LICENSE-RVC.txt")
     (contents / "Resources" / "licenses" / "BlackHole.txt").write_text(
         "BlackHole 2ch by Existential Audio Inc., GPL-3.0, https://github.com/ExistentialAudio/BlackHole\n"
@@ -225,9 +225,9 @@ def main():
         plistlib.dump({
             "CFBundleName": APP_NAME,
             "CFBundleDisplayName": APP_NAME,
-            "CFBundleExecutable": "AmkawaVoice",
-            "CFBundleIdentifier": "ink.amkawa.voice",
-            "CFBundleIconFile": "AmkawaVoice.icns",
+            "CFBundleExecutable": "Kappa",
+            "CFBundleIdentifier": "ink.kappa.voice",
+            "CFBundleIconFile": "Kappa.icns",
             "CFBundlePackageType": "APPL",
             "CFBundleShortVersionString": __version__,
             "CFBundleVersion": __version__,
@@ -238,7 +238,7 @@ def main():
             "NSRequiresAquaSystemAppearance": False,
             "NSPrincipalClass": "NSApplication",
             "NSMicrophoneUsageDescription":
-                "Amkawa Voice слушает микрофон, чтобы превращать ваш голос в аниме-голос.",
+                "Каппа слушает микрофон, чтобы превращать ваш голос в аниме-голос.",
             "LSApplicationCategoryType": "public.app-category.music",
             "LSEnvironment": {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"},
         }, fh)
@@ -251,9 +251,9 @@ def main():
     os.symlink("/Applications", stage / "Applications")
     shutil.copy2(ROOT / "packaging" / "README-dmg.txt", stage / "README.txt")
     raw = work / "uncompressed.dmg"
-    subprocess.run(["xorrisofs", "-D", "-l", "-V", "Amkawa Voice", "-no-pad", "-r", "-dir-mode", "0755",
+    subprocess.run(["xorrisofs", "-D", "-l", "-V", "Kappa", "-no-pad", "-r", "-dir-mode", "0755",
                     "-o", str(raw), str(stage)], check=True, stderr=subprocess.DEVNULL)
-    dmg = out / f"AmkawaVoice-{__version__}-macOS-x64.dmg"
+    dmg = out / f"Kappa-{__version__}-macOS-x64.dmg"
     rm(dmg)
     subprocess.run([args.dmg_tool, str(raw), str(dmg)], check=True, stdout=subprocess.DEVNULL)
     print(f"{dmg}  {dmg.stat().st_size / 1e6:.0f} MB")

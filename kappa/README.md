@@ -1,10 +1,14 @@
-# Amkawa Voice
+# Каппа · κ
+
+<img src="assets/icon.png" width="96" align="right">
+
 
 Аниме-войсчейнджер в реальном времени для **macOS 11 Big Sur+ (Intel x64)**.
-Интерфейс в стиле Claude, минимум анимаций.
+Интерфейс в стиле Claude, минимум анимаций. Раньше называлась *Amkawa Voice*
+(модели и настройки переносятся автоматически).
 
 - Берёт голос с выбранного микрофона и превращает его в женский аниме-голос.
-- Вывод в **виртуальный микрофон «Amkawa Voice Mic»** — его можно выбрать в Discord как устройство ввода.
+- Вывод в **виртуальный микрофон «Kappa Mic»** — его можно выбрать в Discord как устройство ввода.
 - **Слушать себя** — вывод ещё и в наушники, с отдельной громкостью.
 - **Много голосов** с выбором в боковой панели:
   - 8 встроенных (Kawaii, Tsundere, Onee-san, Genki, Kuudere, Idol, Chibi, Yandere) — без интернета,
@@ -24,9 +28,9 @@
 
 **На Mac / в GitHub Actions** (включите Actions в настройках репозитория):
 
-Готовый `.dmg` собирается в GitHub Actions (workflow *Amkawa Voice (macOS Intel .dmg)*) на Intel-раннере macOS.
-Скачать: вкладка **Actions** → последний успешный запуск → артефакт `AmkawaVoice-macOS-x64`.
-Для релиза поставьте тег `voice-v1.0.0` — dmg появится в **Releases**.
+Готовый `.dmg` собирается в GitHub Actions (workflow *Каппа — Kappa (macOS Intel .dmg)*) на Intel-раннере macOS.
+Скачать: вкладка **Actions** → последний успешный запуск → артефакт `Kappa-macOS-x64`.
+Для релиза поставьте тег `kappa-v1.0.0` — dmg появится в **Releases**.
 
 Установка и настройка Discord — в [`packaging/README-dmg.txt`](packaging/README-dmg.txt) (этот же файл лежит в dmg).
 
@@ -42,13 +46,13 @@
 
 | Файл | Что делает |
 |---|---|
-| `amkawa_voice/engine.py` | аудио-потоки (sounddevice/CoreAudio): микрофон → голос → виртуальный микрофон + наушники |
-| `amkawa_voice/voices/dsp.py` | встроенные голоса: фазовый вокодер со сдвигом высоты и формант |
-| `amkawa_voice/voices/rvc.py` | RVC в реальном времени (ContentVec + YIN-питч + синтезатор RVC + SOLA) |
-| `amkawa_voice/voices/hubert.py` | компактный ContentVec/HuBERT без fairseq/transformers |
-| `amkawa_voice/virtual_mic.py` | установка драйвера «Amkawa Voice Mic» (BlackHole, переименованный при сборке) |
-| `amkawa_voice/tts.py` | текст в голос: синтез через `say`, переозвучка выбранной моделью |
-| `amkawa_voice/ui.py`, `theme.py` | интерфейс (PySide6) |
+| `kappa/engine.py` | аудио-потоки (sounddevice/CoreAudio): микрофон → голос → виртуальный микрофон + наушники |
+| `kappa/voices/dsp.py` | встроенные голоса: фазовый вокодер со сдвигом высоты и формант |
+| `kappa/voices/rvc.py` | RVC в реальном времени (ContentVec + YIN-питч + синтезатор RVC + SOLA) |
+| `kappa/voices/hubert.py` | компактный ContentVec/HuBERT без fairseq/transformers |
+| `kappa/virtual_mic.py` | установка драйвера «Kappa Mic» (BlackHole, переименованный при сборке) |
+| `kappa/tts.py` | текст в голос: синтез через `say`, переозвучка выбранной моделью |
+| `kappa/ui.py`, `theme.py` | интерфейс (PySide6) |
 | `packaging/` | PyInstaller, сборка драйвера, проверка совместимости с macOS 11, dmg |
 
 Запуск из исходников: `pip install -r requirements.txt && python run.py`.

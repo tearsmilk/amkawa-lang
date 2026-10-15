@@ -25,6 +25,7 @@ QScrollArea, #MainInner {{ background: {c['bg']}; border: none; }}
 #Sidebar {{ background: {c['sidebar']}; border-right: 1px solid {c['border']}; }}
 #Logo {{ font-family: {SERIF}; font-size: 21px; }}
 #Spark {{ color: {c['accent']}; font-size: 22px; }}
+#Kappa {{ color: {c['accent']}; font-family: {SERIF}; font-style: italic; font-size: 30px; padding-bottom: 3px; }}
 #Section {{ color: {c['muted']}; font-size: 11px; font-weight: 600; letter-spacing: 1px; }}
 #Title {{ font-family: {SERIF}; font-size: 30px; }}
 #CardTitle {{ font-family: {SERIF}; font-size: 18px; }}

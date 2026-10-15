@@ -1,4 +1,4 @@
-"""Claude-like look (shared with Amkawa Voice): warm ivory / charcoal surfaces, terracotta accent, serif headings."""
+"""Claude-like look (shared with Каппа): warm ivory / charcoal surfaces, terracotta accent, serif headings."""
 
 LIGHT = dict(
     bg="#FAF9F5", sidebar="#F0EEE6", card="#FFFFFF", border="#E3DFD3", text="#141413",

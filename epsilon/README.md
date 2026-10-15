@@ -1,7 +1,7 @@
 # ε Epsilon
 
 Локальная база знаний в стиле **Obsidian + Notion** для **macOS 11 Big Sur+ (Intel x64)**,
-интерфейс в стиле Claude (как у [Amkawa Voice](../amkawa-voice)). Минимум анимаций.
+интерфейс в стиле Claude (как у [Каппы](../kappa)). Минимум анимаций.
 
 - Хранилище — обычная папка с `.md` файлами; вложения в `attachments/`, закладки в `.epsilon/links.json`,
   корзина `.trash/`. Ничего не уходит в сеть.
