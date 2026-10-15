@@ -293,5 +293,47 @@ const taskRows = ["Todo", "Done"].map(s => {
 });
 const taskRowSet = variants(taskRows, grid, {Label: "Задача", Source: "Дневник"}); taskRowSet.name = "Task row"; ids.taskRow = taskRowSet.id;
 
+// ---- Attachments: card in the reader (variants by kind), file row icon, player bar
+const attKinds = [["Video", "🎬", "Поездка в горы.mp4", "Видео · MP4 · 419.7 КБ", "▶ Смотреть"],
+                  ["Audio", "🎵", "Голосовая заметка.mp3", "Аудио · MP3 · 23.9 КБ", "▶ Слушать"],
+                  ["PDF", "📕", "Договор аренды.pdf", "PDF · 81 Б", "Открыть"],
+                  ["File", "📎", "Архив проекта.zip", "Архив · ZIP · 2.4 МБ", "Открыть"]];
+const attCards = attKinds.map(([kind, icon, name, meta, action]) => {
+  const c = comp("Kind=" + kind, "HORIZONTAL", {fill: "card", stroke: "border", gap: 0, align: "CENTER"});
+  c.resize(520, 80); c.primaryAxisSizingMode = "FIXED"; c.counterAxisSizingMode = "FIXED";
+  const prev = al("HORIZONTAL", {name: "Preview", fill: kind === "Video" ? "code-bg" : "tag-bg"});
+  prev.resize(kind === "Video" ? 140 : 64, 80); prev.primaryAxisSizingMode = "FIXED"; prev.counterAxisSizingMode = "FIXED";
+  prev.primaryAxisAlignItems = "CENTER"; prev.counterAxisAlignItems = "CENTER";
+  prev.appendChild(txt(icon, {size: 26}));
+  c.appendChild(prev);
+  const col = al("VERTICAL", {name: "Info", gap: 3, pad: [10, 14, 10, 14]});
+  const n = txt(name, {size: 14, style: "Semi Bold"}); n.name = "Name"; col.appendChild(n);
+  const m = txt(meta, {size: 12, color: "muted"}); m.name = "Meta"; col.appendChild(m);
+  const acts = al("HORIZONTAL", {name: "Actions", gap: 12});
+  acts.appendChild(txt(action, {size: 12, color: "accent"}));
+  acts.appendChild(txt("Показать в Finder", {size: 12, color: "muted"}));
+  col.appendChild(acts);
+  c.appendChild(col);
+  return c;
+});
+const attSet = variants(attCards, grid, {Name: "Файл", Meta: "Тип · размер"}); attSet.name = "Attachment card"; ids.attachmentCard = attSet.id;
+attSet.layoutMode = "VERTICAL";
+
+const bar = comp("Player bar", "HORIZONTAL", {gap: 12, pad: [8, 4, 8, 4], align: "CENTER"});
+bar.resize(640, bar.height); bar.primaryAxisSizingMode = "FIXED";
+const play = al("HORIZONTAL", {name: "Play", radius: 19, fill: "accent"});
+play.resize(38, 38); play.primaryAxisSizingMode = "FIXED"; play.counterAxisSizingMode = "FIXED";
+play.primaryAxisAlignItems = "CENTER"; play.counterAxisAlignItems = "CENTER";
+play.appendChild(txt("❚❚", {size: 13, style: "Semi Bold", color: "on-accent"}));
+bar.appendChild(play);
+const track = al("HORIZONTAL", {name: "Seek", radius: 2, fill: "border"});
+track.resize(360, 4); track.primaryAxisSizingMode = "FIXED"; track.counterAxisSizingMode = "FIXED";
+const done = figma.createRectangle(); done.resize(130, 4); done.cornerRadius = 2; done.fills = [fill("accent")]; track.appendChild(done);
+bar.appendChild(track); track.layoutGrow = 1;
+bar.appendChild(txt("0:01 / 0:04", {size: 12, color: "muted"}));
+bar.appendChild(txt("🔈", {size: 12}));
+const vol = figma.createRectangle(); vol.resize(90, 4); vol.cornerRadius = 2; vol.fills = [fill("accent")]; bar.appendChild(vol);
+grid.appendChild(bar); ids.playerBar = bar.id;
+
 await root.screenshot({scale: 0.5});
 return {rootId: root.id, colIds, fonts: {SERIF, MONO}, ids, variables: Object.keys(T).length * 2};

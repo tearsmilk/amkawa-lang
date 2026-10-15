@@ -1,4 +1,5 @@
-// Epsilon — Screens page: Main (Light/Dark), Links, Calendar (Light/Dark), Settings. Run after 01_ui_kit.js.
+// Epsilon — Screens page: Main (Light/Dark), Links, Calendar (Light/Dark), Settings, Attachments (note, viewer, files).
+// Run after 01_ui_kit.js.
 let page = figma.root.children.find(p => p.name === "Screens");
 if (!page) { page = figma.createPage(); page.name = "Screens"; }
 await figma.setCurrentPageAsync(page);
@@ -124,7 +125,7 @@ function noteScreen(name, x) {
   const sp = figma.createFrame(); sp.fills = []; sp.resize(4, 4); header.appendChild(sp); sp.layoutGrow = 1;
   const seg = al("HORIZONTAL", {name: "Segmented", gap: 0, radius: 8, stroke: "border", fill: "card"}); seg.clipsContent = true;
   for (const [i, l] of ["Редактор", "Разделить", "Просмотр"].entries()) { const s = al("HORIZONTAL", {name: l, pad: [5, 12, 5, 12], fill: i === 1 ? "selected" : null}); s.appendChild(txt(l, {size: 12})); seg.appendChild(s); }
-  header.appendChild(seg); header.appendChild(txt("  ···", {color: "muted"}));
+  header.appendChild(seg); header.appendChild(txt("  📎", {color: "muted"})); header.appendChild(txt("  ···", {color: "muted"}));
   const split = al("HORIZONTAL", {name: "Split", gap: 0}); add(center, split, {h: "FILL", v: "FILL"});
   // editor
   const ed = al("VERTICAL", {name: "Editor", gap: 6, pad: 28, fill: "editor"}); add(split, ed, {h: "FILL", v: "FILL"});
@@ -309,6 +310,139 @@ function settingsScreen(x) {
   return dlg;
 }
 
+// ---- attachments
+function photo(w, h) {  // stand-in for a picture: sunset gradient
+  const r = figma.createRectangle(); r.name = "Photo"; r.resize(w, h); r.cornerRadius = 6;
+  r.fills = [{type: "GRADIENT_LINEAR", gradientTransform: [[0, 1, 0], [-1, 0, 1]],
+    gradientStops: [{position: 0, color: {r: 0.98, g: 0.75, b: 0.55, a: 1}}, {position: 0.6, color: {r: 0.83, g: 0.45, b: 0.37, a: 1}},
+                    {position: 1, color: {r: 0.2, g: 0.15, b: 0.22, a: 1}}]}];
+  return r;
+}
+function attachmentCard(icon, name, meta, action, width) {
+  const c = al("HORIZONTAL", {name: "Attachment card / " + name, gap: 0, fill: "card", stroke: "border", align: "CENTER"});
+  c.resize(width, 80); c.primaryAxisSizingMode = "FIXED"; c.counterAxisSizingMode = "FIXED";
+  const prev = al("HORIZONTAL", {name: "Preview", fill: "tag-bg"});
+  prev.resize(64, 80); prev.primaryAxisSizingMode = "FIXED"; prev.counterAxisSizingMode = "FIXED";
+  prev.primaryAxisAlignItems = "CENTER"; prev.counterAxisAlignItems = "CENTER";
+  prev.appendChild(txt(icon, {size: 26})); c.appendChild(prev);
+  const col = al("VERTICAL", {name: "Info", gap: 3, pad: [10, 14, 10, 14]}); c.appendChild(col);
+  col.appendChild(txt(name, {size: 14, style: "Semi Bold"})); col.appendChild(txt(meta, {size: 12, color: "muted"}));
+  const a = al("HORIZONTAL", {name: "Actions", gap: 12}); col.appendChild(a);
+  a.appendChild(txt(action, {size: 12, color: "accent"})); a.appendChild(txt("Показать в Finder", {size: 12, color: "muted"}));
+  return c;
+}
+function attachmentsNoteScreen(x, y) {
+  const win = al("HORIZONTAL", {name: "Note with attachments — " + MODE, gap: 0, fill: "bg"});
+  win.resize(1360, 860); win.primaryAxisSizingMode = "FIXED"; win.counterAxisSizingMode = "FIXED";
+  win.cornerRadius = 12; win.clipsContent = true; win.x = x; win.y = y;
+  add(win, sidebar("Поездка"), {v: "FILL"});
+  const center = al("VERTICAL", {name: "Center", gap: 0, fill: "bg"}); add(win, center, {h: "FILL", v: "FILL"});
+  add(center, tabBar(["Добро пожаловать", "Поездка"], "Поездка"), {h: "FILL"});
+  const header = al("HORIZONTAL", {name: "Note header", pad: [14, 18, 10, 28], align: "CENTER"}); add(center, header, {h: "FILL"});
+  const tc = al("VERTICAL", {name: "Title", gap: 2}); header.appendChild(tc);
+  tc.appendChild(txt("Поездка", {family: SERIF, size: 22})); tc.appendChild(txt("Epsilon", {size: 12, color: "muted"}));
+  const sp = figma.createFrame(); sp.fills = []; sp.resize(4, 4); header.appendChild(sp); sp.layoutGrow = 1;
+  const seg = al("HORIZONTAL", {name: "Segmented", gap: 0, radius: 8, stroke: "border", fill: "card"}); seg.clipsContent = true;
+  for (const [i, l] of ["Редактор", "Разделить", "Просмотр"].entries()) { const s = al("HORIZONTAL", {name: l, pad: [5, 12, 5, 12], fill: i === 2 ? "selected" : null}); s.appendChild(txt(l, {size: 12})); seg.appendChild(s); }
+  header.appendChild(seg);
+  const clip = al("HORIZONTAL", {name: "Attach button (⇧⌘A)", pad: [4, 6, 4, 6], radius: 6, fill: "hover"}); clip.appendChild(txt("📎", {color: "accent"}));
+  header.appendChild(clip); header.appendChild(txt("  ···", {color: "muted"}));
+  const rd = al("VERTICAL", {name: "Reader", gap: 12, pad: [8, 28, 28, 28], fill: "bg"}); add(center, rd, {h: "FILL", v: "FILL"});
+  rd.appendChild(txt("Поездка в горы", {family: SERIF, size: 30}));
+  rd.appendChild(txt("Фото, видео и документы с выходных.", {size: 15}));
+  const media = al("HORIZONTAL", {name: "Photo + GIF", gap: 12, align: "MAX"}); rd.appendChild(media);
+  media.appendChild(photo(440, 286));
+  const gif = al("VERTICAL", {name: "GIF (animated)", gap: 0, radius: 6, fill: "card", stroke: "border"}); gif.resize(240, 135);
+  gif.primaryAxisSizingMode = "FIXED"; gif.counterAxisSizingMode = "FIXED"; gif.primaryAxisAlignItems = "CENTER"; gif.counterAxisAlignItems = "CENTER";
+  const dot = figma.createEllipse(); dot.resize(30, 30); dot.fills = [fill("accent")]; gif.appendChild(dot);
+  gif.appendChild(txt("GIF", {size: 11, style: "Semi Bold", color: "muted"}));
+  media.appendChild(gif);
+  for (const [icon, name, meta, action] of [["🎬", "Поездка в горы.mp4", "Видео · MP4 · 419.7 КБ", "▶ Смотреть"],
+      ["🎵", "Голосовая заметка.mp3", "Аудио · MP3 · 23.9 КБ", "▶ Слушать"], ["📕", "Договор аренды.pdf", "PDF · 81 Б", "Открыть"]])
+    add(rd, attachmentCard(icon, name, meta, action, 840), {h: "FILL"});
+  const tail = al("HORIZONTAL", {name: "Inline link", gap: 4}); rd.appendChild(tail);
+  tail.appendChild(txt("Ссылка в тексте:", {size: 15})); tail.appendChild(txt("📕 Договор аренды.pdf", {size: 15, color: "accent"}));
+  return win;
+}
+function viewerScreen(x, y, kind) {
+  const dlg = al("VERTICAL", {name: "Media viewer / " + kind + " — " + MODE, gap: 12, pad: [16, 20, 18, 20], fill: "bg", radius: 12, stroke: "border"});
+  dlg.resize(980, 680); dlg.primaryAxisSizingMode = "FIXED"; dlg.counterAxisSizingMode = "FIXED"; dlg.x = x; dlg.y = y;
+  dlg.effects = [{type: "DROP_SHADOW", color: {r: 0, g: 0, b: 0, a: 0.15}, offset: {x: 0, y: 12}, radius: 40, spread: 0, visible: true, blendMode: "NORMAL"}];
+  const head = al("HORIZONTAL", {name: "Header", gap: 8, align: "CENTER"}); add(dlg, head, {h: "FILL"});
+  const tc = al("VERTICAL", {name: "Title", gap: 2}); head.appendChild(tc);
+  tc.appendChild(txt(kind === "Photo" ? "Закат.jpg" : "Поездка в горы.mp4", {family: SERIF, size: 18}));
+  tc.appendChild(txt(kind === "Photo" ? "Фото · JPG · 34.9 КБ   ·   1 из 5" : "Видео · MP4 · 419.7 КБ   ·   3 из 5", {size: 12, color: "muted"}));
+  const sp = figma.createFrame(); sp.fills = []; sp.resize(4, 4); head.appendChild(sp); sp.layoutGrow = 1;
+  if (kind === "Photo") {
+    const seg = al("HORIZONTAL", {name: "Zoom", gap: 0, radius: 8, stroke: "border", fill: "card"}); seg.clipsContent = true;
+    for (const l of ["−", "Вписать", "100%", "+"]) { const s = al("HORIZONTAL", {name: l, pad: [5, 12, 5, 12]}); s.appendChild(txt(l, {size: 12})); seg.appendChild(s); }
+    head.appendChild(seg);
+  }
+  head.appendChild(txt("‹   ›", {size: 15, color: "muted"}));
+  head.appendChild(button("Открыть в программе", "Secondary"));
+  head.appendChild(txt("Показать в Finder", {color: "muted"}));
+  const stage = al("VERTICAL", {name: "Stage", gap: 0, radius: 12, fill: "code-bg", stroke: "border"}); add(dlg, stage, {h: "FILL", v: "FILL"});
+  stage.primaryAxisAlignItems = "CENTER"; stage.counterAxisAlignItems = "CENTER";
+  if (kind === "Photo") stage.appendChild(photo(860, 560));
+  else {
+    const video = figma.createRectangle(); video.name = "Video frame"; video.resize(900, 506); video.fills = [{type: "SOLID", color: {r: 0.08, g: 0.08, b: 0.08}}];
+    stage.appendChild(video);
+    const bar = al("HORIZONTAL", {name: "Player bar", gap: 12, align: "CENTER"}); add(dlg, bar, {h: "FILL"});
+    const play = al("HORIZONTAL", {name: "Play", radius: 19, fill: "accent"}); play.resize(38, 38);
+    play.primaryAxisSizingMode = "FIXED"; play.counterAxisSizingMode = "FIXED"; play.primaryAxisAlignItems = "CENTER"; play.counterAxisAlignItems = "CENTER";
+    play.appendChild(txt("❚❚", {style: "Semi Bold", color: "on-accent"})); bar.appendChild(play);
+    const track = al("HORIZONTAL", {name: "Seek", radius: 2, fill: "border"}); track.resize(600, 4);
+    track.primaryAxisSizingMode = "FIXED"; track.counterAxisSizingMode = "FIXED";
+    const done = figma.createRectangle(); done.resize(220, 4); done.cornerRadius = 2; done.fills = [fill("accent")]; track.appendChild(done);
+    bar.appendChild(track); track.layoutGrow = 1;
+    bar.appendChild(txt("0:01 / 0:04", {size: 12, color: "muted"})); bar.appendChild(txt("🔈", {size: 12}));
+    const vol = figma.createRectangle(); vol.resize(90, 4); vol.cornerRadius = 2; vol.fills = [fill("accent")]; bar.appendChild(vol);
+  }
+  return dlg;
+}
+function filesScreen(x, y) {
+  const win = al("HORIZONTAL", {name: "Files — " + MODE, gap: 0, fill: "bg"});
+  win.resize(1360, 860); win.primaryAxisSizingMode = "FIXED"; win.counterAxisSizingMode = "FIXED";
+  win.cornerRadius = 12; win.clipsContent = true; win.x = x; win.y = y;
+  add(win, sidebar(null), {v: "FILL"});
+  const center = al("VERTICAL", {name: "Center", gap: 0, fill: "bg"}); add(win, center, {h: "FILL", v: "FILL"});
+  add(center, tabBar(["Поездка", "▤ Файлы"], "▤ Файлы"), {h: "FILL"});
+  const body = al("VERTICAL", {name: "Files", gap: 12, pad: [22, 28, 20, 28]}); add(center, body, {h: "FILL", v: "FILL"});
+  body.appendChild(txt("Файлы", {family: SERIF, size: 30}));
+  body.appendChild(txt("Вложения хранилища: фото, GIF, видео, аудио, документы. Перетащите файлы сюда или прикрепите к заметке кнопкой 📎.", {color: "muted"}));
+  const row = al("HORIZONTAL", {name: "Toolbar", gap: 8, align: "CENTER"}); add(body, row, {h: "FILL"});
+  row.appendChild(button("Добавить файлы…", "Accent")); row.appendChild(button("Открыть папку", "Secondary"));
+  const sp = figma.createFrame(); sp.fills = []; sp.resize(4, 4); row.appendChild(sp); sp.layoutGrow = 1;
+  const seg = al("HORIZONTAL", {name: "Filter", gap: 0, radius: 8, stroke: "border", fill: "card"}); seg.clipsContent = true;
+  for (const [i, l] of ["Все", "Фото", "GIF", "Видео", "Аудио", "Документы", "Другое"].entries()) {
+    const s = al("HORIZONTAL", {name: l, pad: [5, 12, 5, 12], fill: i === 0 ? "selected" : null}); s.appendChild(txt(l, {size: 12})); seg.appendChild(s);
+  }
+  row.appendChild(seg);
+  const table = al("VERTICAL", {name: "Table", gap: 0}); add(body, table, {h: "FILL"});
+  const rows = [[null, "ИМЯ", "ТИП", "РАЗМЕР", "ИЗМЕНЁН"], ["📕", "Договор аренды.pdf", "PDF", "81 Б", "15.10.2026 15:50"],
+    ["gif", "Анимация.gif", "GIF", "5.2 КБ", "15.10.2026 15:50"], ["photo", "Закат.jpg", "Фото", "34.9 КБ", "15.10.2026 15:50"],
+    ["🎵", "Голосовая заметка.mp3", "Аудио", "23.9 КБ", "15.10.2026 15:50"], ["🎬", "Поездка в горы.mp4", "Видео", "419.7 КБ", "15.10.2026 15:50"]];
+  rows.forEach((vals, r) => {
+    const tr = al("HORIZONTAL", {name: r ? "Row" : "Header", gap: 16, pad: [8, 10, 8, 10], align: "CENTER"});
+    tr.strokes = [fill("border")]; tr.strokeTopWeight = 0; tr.strokeLeftWeight = 0; tr.strokeRightWeight = 0; tr.strokeBottomWeight = 1;
+    add(table, tr, {h: "FILL"});
+    if (r) {
+      let icon;
+      if (vals[0] === "photo") icon = photo(40, 40);
+      else {
+        icon = al("HORIZONTAL", {name: "Icon", radius: 8, fill: vals[0] === "gif" ? "card" : "tag-bg", stroke: vals[0] === "gif" ? "border" : null});
+        icon.resize(40, 40); icon.primaryAxisSizingMode = "FIXED"; icon.counterAxisSizingMode = "FIXED";
+        icon.primaryAxisAlignItems = "CENTER"; icon.counterAxisAlignItems = "CENTER";
+        if (vals[0] === "gif") { const d = figma.createEllipse(); d.resize(10, 10); d.fills = [fill("accent")]; icon.appendChild(d); }
+        else icon.appendChild(txt(vals[0], {size: 20}));
+      }
+      tr.appendChild(icon);
+    }
+    [r ? 560 : 616, 90, 90, 140].forEach((w, i) => tr.appendChild(txt(vals[i + 1], {w, size: r ? 13 : 11, style: r ? "Regular" : "Semi Bold", color: r ? "text" : "muted"})));
+  });
+  return win;
+}
+
 const created = [];
 MODE = "Light"; created.push(noteScreen("Main — Light", 0).id);
 MODE = "Dark"; created.push(noteScreen("Main — Dark", 1440).id);
@@ -316,6 +450,11 @@ MODE = "Light"; created.push(linksScreen(2880).id);
 MODE = "Light"; created.push(calendarScreen(0).id);
 MODE = "Dark"; created.push(calendarScreen(1520).id);
 MODE = "Light"; created.push(settingsScreen(3040).id);
+MODE = "Light"; created.push(attachmentsNoteScreen(0, 2000).id);
+MODE = "Dark"; created.push(attachmentsNoteScreen(1440, 2000).id);
+MODE = "Light"; created.push(viewerScreen(2880, 2000, "Photo").id);
+MODE = "Dark"; created.push(viewerScreen(2880, 2760, "Video").id);
+MODE = "Light"; created.push(filesScreen(0, 2940).id);
 const shot = page.children[0];
 await shot.screenshot({scale: 0.5});
 return {pageId: page.id, createdNodeIds: created};

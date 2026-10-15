@@ -4,8 +4,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QDir, QSortFilterProxyModel, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QIcon, QImage, QKeySequence, QPalette, QShortcut, QTextDocument
+from PySide6.QtCore import QDir, QObject, QSize, QSortFilterProxyModel, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import (
+    QDesktopServices, QIcon, QImageReader, QKeySequence, QMovie, QPalette, QPixmap, QShortcut, QTextDocument,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFileSystemModel, QFrame,
     QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
@@ -14,10 +16,12 @@ from PySide6.QtWidgets import (
 )
 
 from . import APP_NAME, LOGO, __version__
+from . import attachments as att
 from .calendar_view import CalendarTab, notify
 from .editor import MarkdownEditor
 from .graph import GraphView
-from .mdrender import Renderer
+from .mdrender import Renderer, href_path
+from .media_view import MediaViewer
 from .paths import Settings, default_vault, resource_path
 from .theme import DARK, LIGHT, stylesheet
 from .tasks import TaskIndex
@@ -34,11 +38,7 @@ def reveal_in_finder(path):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(path).parent)))
 
 
-def human_size(n):
-    for unit in ("Б", "КБ", "МБ", "ГБ"):
-        if n < 1024 or unit == "ГБ":
-            return f"{n:.0f} {unit}" if unit == "Б" else f"{n:.1f} {unit}"
-        n /= 1024
+human_size = att.human_size
 
 
 def muted(text):
@@ -63,16 +63,59 @@ class Reader(QTextBrowser):
         self.setObjectName("Reader")
         self.setOpenLinks(False)
         self.document().setDocumentMargin(28)
+        self._movies = {}  # GIF path → QMovie: animated in place
+
+    def _max_width(self):
+        return max(200, self.viewport().width() - 90)
 
     def loadResource(self, kind, url):
         if kind == QTextDocument.ImageResource and url.isLocalFile():
-            img = QImage(url.toLocalFile())
+            path = url.toLocalFile()
+            if path.lower().endswith(".gif"):
+                frame = self._gif(path, url)
+                if frame is not None:
+                    return frame
+            reader = QImageReader(path)
+            reader.setAutoTransform(True)
+            img = reader.read()
             if not img.isNull():
-                max_w = max(200, self.viewport().width() - 90)
-                if img.width() > max_w:
-                    img = img.scaledToWidth(max_w, Qt.SmoothTransformation)
+                if img.width() > self._max_width():
+                    img = img.scaledToWidth(self._max_width(), Qt.SmoothTransformation)
                 return img
         return super().loadResource(kind, url)
+
+    def _gif(self, path, url):
+        movie = self._movies.get(path)
+        if movie is None:
+            movie = QMovie(path)
+            if not movie.isValid():
+                return None
+            movie.setCacheMode(QMovie.CacheAll)
+            movie.jumpToFrame(0)
+            size = movie.currentImage().size()
+            if size.width() > self._max_width():
+                movie.setScaledSize(size.scaled(self._max_width(), 100000, Qt.KeepAspectRatio))
+            self._movies[path] = movie
+            if movie.frameCount() != 1:
+                movie.frameChanged.connect(lambda _n, u=QUrl(url), m=movie: self._next_frame(u, m))
+                movie.start()
+        return movie.currentImage()
+
+    def _next_frame(self, url, movie):
+        self.document().addResource(QTextDocument.ImageResource, url, movie.currentImage())
+        self.viewport().update()
+
+    def set_html(self, html):
+        """setHtml + stop the GIFs that are no longer in the note."""
+        self.setHtml(html)
+        for path in list(self._movies):
+            if QUrl.fromLocalFile(path).toString(QUrl.FullyEncoded) not in html:
+                self._movies.pop(path).deleteLater()
+
+    def stop_movies(self):
+        for movie in self._movies.values():
+            movie.deleteLater()
+        self._movies.clear()
 
 
 # ====================================================================== note tab
@@ -119,6 +162,11 @@ class NoteTab(QWidget):
             seg_lay.addWidget(b)
         self.mode_group.buttonClicked.connect(lambda b: self.set_mode(b.property("mode")))
         head.addWidget(seg)
+        clip = QPushButton("📎")
+        clip.setObjectName("Link")
+        clip.setToolTip("Прикрепить файлы, фото, видео, GIF  (⇧⌘A)")
+        clip.clicked.connect(self.attach)
+        head.addWidget(clip)
         more = QPushButton("···")
         more.setObjectName("Link")
         more.clicked.connect(lambda: self._more_menu(more))
@@ -129,6 +177,7 @@ class NoteTab(QWidget):
         self.splitter.setHandleWidth(1)
         self.editor = MarkdownEditor(self.vault, self.path, win.colors)
         self.editor.status.connect(self.status)
+        self.editor.attach_requested.connect(self.attach)
         self.reader = Reader()
         self.reader.anchorClicked.connect(self._link_clicked)
         self.splitter.addWidget(self.editor)
@@ -220,7 +269,8 @@ class NoteTab(QWidget):
     def refresh_preview(self):
         if not self.reader.isVisible() and getattr(self, "mode", "split") == "edit":
             return
-        renderer = Renderer(self.win.colors, self.vault.resolve, self.win.colors.get("code_style", "default"))
+        renderer = Renderer(self.win.colors, self.vault.resolve, self.win.colors.get("code_style", "default"),
+                            base_dir=self.path.parent, thumbs=self.win.thumbs)
         html = renderer.render(self.editor.toPlainText())
         self.renderer = renderer
         doc = self.reader.document()
@@ -228,8 +278,25 @@ class NoteTab(QWidget):
         doc.setBaseUrl(QUrl.fromLocalFile(str(self.path.parent) + "/"))
         bar = self.reader.verticalScrollBar()
         pos = bar.value()
-        self.reader.setHtml(html)
+        self.reader.set_html(html)
         bar.setValue(pos)
+
+    # ------------------------------------------------------------ attachments
+    def attach(self):
+        paths, _ = QFileDialog.getOpenFileNames(self, "Прикрепить файлы", str(Path.home()), att.dialog_filters())
+        if not paths:
+            return
+        if self.mode == "read":
+            # insert at the end, the editor is hidden
+            c = self.editor.textCursor()
+            c.movePosition(c.MoveOperation.End)
+            self.editor.setTextCursor(c)
+        self.editor.insert_files(paths)
+        self.refresh_preview()
+
+    def open_attachment(self, path):
+        items = list(dict.fromkeys(getattr(getattr(self, "renderer", None), "attachments", [])))
+        self.win.open_attachment(path, items)
 
     # ------------------------------------------------------------ links
     def _link_clicked(self, url: QUrl):
@@ -246,12 +313,16 @@ class NoteTab(QWidget):
             if n < len(self.renderer.code_blocks):
                 QApplication.clipboard().setText(self.renderer.code_blocks[n])
                 self.status.emit("Код скопирован")
+        elif scheme == "attach":
+            self.open_attachment(href_path(url.toString(QUrl.FullyEncoded)))
+        elif scheme == "reveal":
+            reveal_in_finder(href_path(url.toString(QUrl.FullyEncoded)))
         elif url.isLocalFile() or scheme == "":
             local = Path(url.toLocalFile()) if url.isLocalFile() else (self.path.parent / QUrl.fromPercentEncoding(s.encode()))
             if local.suffix == ".md" and local.exists():
                 self.win.open_note(local)
             elif local.exists():
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(local)))
+                self.open_attachment(local.resolve())
         else:
             QDesktopServices.openUrl(url)
 
@@ -386,10 +457,13 @@ class LinksTab(QWidget):
 
 
 class FilesTab(QWidget):
+    ICON = 40
+
     def __init__(self, win):
         super().__init__()
         self.win = win
         self.kind = "files"
+        self.filter = None
         self.setAcceptDrops(True)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(28, 22, 28, 20)
@@ -397,7 +471,8 @@ class FilesTab(QWidget):
         title = QLabel("Файлы")
         title.setObjectName("Title")
         lay.addWidget(title)
-        lay.addWidget(muted("Все файлы копируются в папку attachments внутри хранилища. Перетащите файлы сюда."))
+        lay.addWidget(muted("Вложения хранилища: фото, GIF, видео, аудио, документы. Всё копируется в папку "
+                            "attachments. Перетащите файлы сюда или прикрепите к заметке кнопкой 📎."))
         row = QHBoxLayout()
         add = QPushButton("Добавить файлы…")
         add.setObjectName("Accent")
@@ -406,29 +481,112 @@ class FilesTab(QWidget):
         row.addWidget(QPushButton("Открыть папку", clicked=lambda: QDesktopServices.openUrl(
             QUrl.fromLocalFile(str(self.win.vault.root / ATTACHMENTS)))))
         row.addStretch(1)
+        seg = QFrame()
+        seg.setObjectName("Segment")
+        seg_lay = QHBoxLayout(seg)
+        seg_lay.setContentsMargins(0, 0, 0, 0)
+        seg_lay.setSpacing(0)
+        self.filter_group = QButtonGroup(self)
+        for n, (label, kinds) in enumerate(att.FILTERS):
+            b = QPushButton(label)
+            b.setCheckable(True)
+            b.setChecked(n == 0)
+            b.setProperty("kinds", sorted(kinds) if kinds else [])
+            self.filter_group.addButton(b)
+            seg_lay.addWidget(b)
+        self.filter_group.buttonClicked.connect(self._set_filter)
+        row.addWidget(seg)
         lay.addLayout(row)
-        self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Имя", "Размер", "Изменён"])
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["Имя", "Тип", "Размер", "Изменён"])
         self.table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        for col in (1, 2, 3):
+            self.table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
         self.table.verticalHeader().hide()
+        self.table.verticalHeader().setDefaultSectionSize(self.ICON + 12)
+        self.table.setIconSize(QSize(self.ICON, self.ICON))
         self.table.setShowGrid(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.cellDoubleClicked.connect(lambda r, _c: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.files[r]))))
+        self.table.cellDoubleClicked.connect(lambda r, _c: self._view(r))
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._menu)
         lay.addWidget(self.table, 1)
+        self.count = muted("")
+        lay.addWidget(self.count)
+        self._icons = {}
         self.refresh()
 
+    def _set_filter(self, button):
+        kinds = button.property("kinds")
+        self.filter = set(kinds) if kinds else None
+        self.refresh()
+
+    def _icon(self, p):
+        key = (p, p.stat().st_mtime_ns)
+        if key in self._icons:
+            return self._icons[key]
+        icon = None
+        size = self.ICON * 2
+        if att.kind_of(p) in ("image", "gif"):
+            reader = QImageReader(str(p))
+            reader.setAutoTransform(True)
+            src = reader.size()
+            if src.isValid() and (src.width() > size or src.height() > size):
+                reader.setScaledSize(src.scaled(size, size, Qt.KeepAspectRatio))
+            img = reader.read()
+            if not img.isNull():
+                icon = QIcon(QPixmap.fromImage(img))
+        else:
+            thumb = self.win.thumbs.get(p)
+            if thumb is not None:
+                icon = QIcon(str(thumb))
+        if icon is None:
+            icon = self._glyph(att.icon_of(p))
+        else:
+            self._icons[key] = icon  # glyphs are not cached: a Quick Look thumbnail may come later
+        return icon
+
+    def _glyph(self, text):
+        """Type icon for files without a preview: emoji on a soft tile, same size as thumbnails."""
+        from PySide6.QtGui import QColor, QFont, QPainter
+
+        size = self.ICON * 2
+        pix = QPixmap(size, size)
+        pix.fill(Qt.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(self.win.colors["tag_bg"]))
+        p.drawRoundedRect(0, 0, size, size, 16, 16)
+        font = QFont()
+        font.setPixelSize(int(size * 0.5))
+        p.setFont(font)
+        p.setPen(QColor(self.win.colors["text"]))
+        p.drawText(pix.rect(), Qt.AlignCenter, text)
+        p.end()
+        return QIcon(pix)
+
     def refresh(self):
-        self.files = self.win.vault.attachments()
+        files = self.win.vault.attachments()
+        self.files = [p for p in files if self.filter is None or att.kind_of(p) in self.filter]
         self.table.setRowCount(len(self.files))
         for r, p in enumerate(self.files):
             st = p.stat()
-            for c, val in enumerate([p.name, human_size(st.st_size),
-                                     dt.datetime.fromtimestamp(st.st_mtime).strftime("%d.%m.%Y %H:%M")]):
+            name = QTableWidgetItem(p.name)
+            name.setIcon(self._icon(p))
+            name.setToolTip(str(p.relative_to(self.win.vault.root)))
+            self.table.setItem(r, 0, name)
+            for c, val in enumerate([att.label_of(p), human_size(st.st_size),
+                                     dt.datetime.fromtimestamp(st.st_mtime).strftime("%d.%m.%Y %H:%M")], start=1):
                 self.table.setItem(r, c, QTableWidgetItem(val))
+        total = sum(p.stat().st_size for p in self.files)
+        self.count.setText(f"{len(self.files)} из {len(files)} · {human_size(total)}" if self.filter
+                           else f"Всего файлов: {len(files)} · {human_size(total)}")
+
+    def _view(self, row):
+        self.win.open_attachment(self.files[row], self.files)
 
     def import_files(self, paths):
         for p in paths:
@@ -437,7 +595,7 @@ class FilesTab(QWidget):
         self.refresh()
 
     def _pick(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, "Добавить файлы")
+        paths, _ = QFileDialog.getOpenFileNames(self, "Добавить файлы", str(Path.home()), att.dialog_filters())
         self.import_files(paths)
 
     def dragEnterEvent(self, e):
@@ -453,7 +611,8 @@ class FilesTab(QWidget):
             return
         p = self.files[row]
         menu = QMenu(self)
-        menu.addAction("Открыть", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(p))))
+        menu.addAction("Просмотр", lambda: self._view(row))
+        menu.addAction("Открыть в программе", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(p))))
         menu.addAction("Показать в Finder", lambda: reveal_in_finder(p))
         menu.addAction("Вставить в заметку", lambda: self.win.insert_file_link(p))
         menu.addSeparator()
@@ -736,6 +895,11 @@ class NotesModel(QSortFilterProxyModel):
 
 
 # ====================================================================== main window
+class ThumbBridge(QObject):
+    """Carries "thumbnail ready" from the worker thread to the UI thread."""
+    ready = Signal(object)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, app, vault_path=None):
         super().__init__()
@@ -747,6 +911,9 @@ class MainWindow(QMainWindow):
         welcome = self.vault.ensure_welcome()
         self.task_index = TaskIndex(self.vault)
         self._reminded = set()
+        self.thumb_bridge = ThumbBridge(self)
+        self.thumb_bridge.ready.connect(self._thumb_ready)
+        self.thumbs = att.Thumbnails(self.vault.root / ".epsilon" / "thumbs", self.thumb_bridge.ready.emit)
         self.settings["vault"] = str(self.vault.root)
         recent = [v for v in self.settings.get("recent_vaults", []) if v != str(self.vault.root)]
         self.settings["recent_vaults"] = [str(self.vault.root)] + recent[:7]
@@ -958,6 +1125,7 @@ class MainWindow(QMainWindow):
         sc("Ctrl+O", lambda: QuickSwitcher(self).exec())
         sc("Ctrl+Shift+C", self.open_calendar)
         sc("Ctrl+Shift+F", lambda: self.open_search(""))
+        sc("Ctrl+Shift+A", self.attach_to_current)
         sc("Ctrl+W", lambda: self.close_tab(self.tabs.currentIndex()))
         sc("Ctrl+E", self._cycle_mode)
         sc("Ctrl+\\", self._toggle_right)
@@ -1088,6 +1256,36 @@ class MainWindow(QMainWindow):
     def open_files(self):
         self._singleton("files", lambda: FilesTab(self), "▤ Файлы")
 
+    def open_attachment(self, path, items=None):
+        path = Path(path)
+        items = [Path(p) for p in (items or [])]
+        if path not in items:
+            items = [path]
+        MediaViewer(self, items, items.index(path), self.thumbs, reveal_in_finder).exec()
+
+    def attach_to_current(self):
+        tab = self.current_tab()
+        if tab is not None and tab.kind == "note":
+            tab.attach()
+        elif tab is not None and tab.kind == "files":
+            tab._pick()
+        else:
+            self.status.showMessage("Откройте заметку, чтобы прикрепить файлы", 4000)
+
+    def _thumb_ready(self, _path):
+        # one refresh for a burst of finished thumbnails
+        if not hasattr(self, "_thumb_timer"):
+            self._thumb_timer = QTimer(self, singleShot=True, interval=300, timeout=self._refresh_thumbs)
+        self._thumb_timer.start()
+
+    def _refresh_thumbs(self):
+        for i in range(self.tabs.count()):
+            tab = self.tabs.widget(i)
+            if tab.kind == "note":
+                tab.refresh_preview()
+            elif tab.kind == "files":
+                tab.refresh()
+
     def open_calendar(self):
         self._singleton("calendar", lambda: CalendarTab(self), "▦ Календарь")
 
@@ -1131,6 +1329,7 @@ class MainWindow(QMainWindow):
         tab = self.tabs.widget(index)
         if tab.kind == "note":
             tab.save()
+            tab.reader.stop_movies()
         self.tabs.removeTab(index)
         tab.deleteLater()
         self._update_center()

@@ -12,7 +12,8 @@
    на Starter-плане доступен только 1 режим на коллекцию), типографика и компоненты:
    Button (Primary/Accent/Secondary/Ghost/Link), Input, Nav item, Tree item, Tab, Segmented, Tag, Task,
    Code block, Callout (Tip/Note/Warning), Section label, Table row, Card,
-   Calendar day (Default/Today/Selected/Other month), Task row (Todo/Done).
+   Calendar day (Default/Today/Selected/Other month), Task row (Todo/Done),
+   Attachment card (Video/Audio/PDF/File), Player bar.
 2. `02_screens.js` — страница **Screens**:
 
 | Экран | Темы | В приложении |
@@ -21,5 +22,8 @@
 | Links — закладки | Light | «☰ Ссылки» |
 | Calendar — месяц, планировщик, план дня | Light, Dark | «▦ Календарь» |
 | Settings — внешний вид, хранилище, корзина | Light | ⚙ / ⌘, |
+| Note with attachments — фото, GIF, карточки видео/аудио/PDF, кнопка 📎 | Light, Dark | заметка в режиме «Просмотр» |
+| Media viewer — фото (масштаб), видео (плеер) | Light (фото), Dark (видео) | щелчок по вложению |
+| Files — вложения с превью и фильтром по типу | Light | «▤ Файлы» |
 
 Скрипты пересоздают свои страницы целиком, их можно запускать повторно.

@@ -7,8 +7,8 @@ from PySide6.QtCore import QMimeData, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QKeySequence, QSyntaxHighlighter, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import QMenu, QPlainTextEdit
 
+from . import attachments as att
 from .codedetect import detect_language, looks_like_code
-from .mdrender import IMAGE_EXT
 
 MONO = QFont("Menlo")
 MONO.setStyleHint(QFont.Monospace)
@@ -18,8 +18,11 @@ BLOCKS = [
     ("Задача", "- [ ] ", ""), ("Список", "- ", ""), ("Нумерованный список", "1. ", ""),
     ("Цитата", "> ", ""), ("Выноска", "> [!note] ", "\n> "), ("Блок кода", "```", "\n\n```"),
     ("Таблица", "| Колонка 1 | Колонка 2 |\n|---|---|\n| ", " |  |"), ("Разделитель", "---\n", ""),
-    ("Ссылка на заметку", "[[", "]]"), ("Сегодняшняя дата", "@date", ""),
+    ("Ссылка на заметку", "[[", "]]"), ("Вложение: файл, фото, видео, GIF…", "@attach", ""),
+    ("Сегодняшняя дата", "@date", ""),
 ]
+# shown inline (photo, GIF) or as a player card (video, audio) in the reader
+EMBED_KINDS = {"image", "gif", "video", "audio"}
 
 
 class MarkdownHighlighter(QSyntaxHighlighter):
@@ -149,6 +152,7 @@ class MarkdownEditor(QPlainTextEdit):
     """`vault` is used to store pasted / dropped files as attachments."""
 
     status = Signal(str)
+    attach_requested = Signal()
 
     def __init__(self, vault, note_path, colors):
         super().__init__()
@@ -177,7 +181,7 @@ class MarkdownEditor(QPlainTextEdit):
             target = os.path.relpath(path, self.note_path.parent).replace(" ", "%20")
         except ValueError:
             pass
-        if Path(path).suffix.lower() in IMAGE_EXT:
+        if att.kind_of(path) in EMBED_KINDS:
             return f"![{Path(path).stem}]({target})"
         return f"[{Path(path).name}]({target})"
 
@@ -190,8 +194,12 @@ class MarkdownEditor(QPlainTextEdit):
             except Exception as exc:
                 self.status.emit(f"Не удалось добавить {Path(p).name}: {exc}")
         if links:
-            self.textCursor().insertText("\n".join(links) + "\n")
-            self.status.emit(f"Добавлено файлов: {len(links)} → attachments")
+            # every attachment on its own line, so the reader shows it as a picture / card
+            cursor = self.textCursor()
+            prefix = "\n" if cursor.block().text()[:cursor.positionInBlock()].strip() else ""
+            cursor.insertText(prefix + "\n".join(links) + "\n")
+            self.setTextCursor(cursor)
+            self.status.emit(f"Прикреплено файлов: {len(links)} → attachments")
 
     # ---------------------------------------------------------------- paste / drop
     def canInsertFromMimeData(self, source):
@@ -313,6 +321,9 @@ class MarkdownEditor(QPlainTextEdit):
         before, after = chosen.data()
         c = self.textCursor()
         c.deletePreviousChar()  # remove the "/"
+        if before == "@attach":
+            QTimer.singleShot(0, self.attach_requested.emit)
+            return
         if before == "@date":
             import datetime as dt
 

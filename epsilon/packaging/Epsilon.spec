@@ -15,10 +15,11 @@ a = Analysis(
     ],
     # Pygments loads lexers/styles by name at runtime
     hiddenimports=collect_submodules("pygments.lexers") + collect_submodules("pygments.styles")
-    + collect_submodules("markdown.extensions") + ["PySide6.QtPrintSupport"],
+    + collect_submodules("markdown.extensions")
+    + ["PySide6.QtPrintSupport", "PySide6.QtMultimedia", "PySide6.QtMultimediaWidgets"],  # PDF, video / audio
     excludes=[
         "tkinter", "matplotlib", "numpy", "IPython", "PySide6.QtWebEngineCore", "PySide6.QtQml",
-        "PySide6.QtQuick", "PySide6.Qt3DCore", "PySide6.QtMultimedia", "PySide6.QtNetwork", "PySide6.QtPdf",
+        "PySide6.QtQuick", "PySide6.Qt3DCore", "PySide6.QtPdf",
     ],
 )
 pyz = PYZ(a.pure)

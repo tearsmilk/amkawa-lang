@@ -142,5 +142,11 @@ QListWidget::indicator, QTreeView::indicator {{
 }}
 QListWidget::indicator:checked, QTreeView::indicator:checked {{ background: {c['accent']}; border: 1px solid {c['accent']}; }}
 QPlainTextEdit#Editor {{ padding: 0; }}
+#MediaStage {{ background: {c['code_bg']}; border: 1px solid {c['border']}; border-radius: 12px; }}
+#MediaStage > QWidget > QLabel {{ background: transparent; }}
+#MediaCover {{ font-size: 72px; color: {c['muted']}; background: {c['code_bg']}; border-radius: 12px; }}
+QPushButton#PlayButton {{ background: {c['accent']}; color: {c['accent_text']}; border: none; border-radius: 19px;
+    padding: 0; font-size: 14px; font-weight: 600; }}
+QPushButton#PlayButton:hover {{ background: {c['accent_hover']}; }}
 QToolTip {{ background: {c['card']}; color: {c['text']}; border: 1px solid {c['border']}; padding: 4px; }}
 """

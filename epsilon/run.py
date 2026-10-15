@@ -56,6 +56,25 @@ def selftest():
         assert len(idx.on(day)) == 3
         idx.delete(next(t for t in idx.on(day) if t.text == "готово"))
         assert len(idx.on(day)) == 2
+        # attachments: import, kinds, picture / GIF inline, video / file as a card
+        from epsilon import attachments as att
+
+        src = Path(tmp) / "clip.mp4"
+        src.write_bytes(b"\0" * 2048)
+        gif = Path(tmp) / "fun.gif"
+        gif.write_bytes(b"GIF89a")
+        clip, anim = v.import_file(src), v.import_file(gif)
+        again = v.import_file(src)
+        assert clip.parent.name == "attachments" and again.name == "clip 2.mp4", again
+        assert [att.kind_of(p) for p in (clip, anim, "a.PDF", "b.mp3", "c.heic", "d.xyz")] == \
+            ["video", "gif", "pdf", "audio", "image", "file"]
+        assert att.describe(clip) == "Видео · MP4 · 2.0 КБ", att.describe(clip)
+        note = v.create_note("Медиа", text="![clip](attachments/clip.mp4)\n\n![fun](attachments/fun.gif)\n"
+                                           "текст ![[fun.gif]] и [[clip.mp4]]\n")
+        r = Renderer(LIGHT, v.resolve, base_dir=note.parent)
+        html = r.render(v.read(note))
+        assert "▶&nbsp;Смотреть" in html and "Видео · MP4" in html and anim.as_uri() in html, html
+        assert "attach:" in html and "reveal:" in html and r.attachments[:2] == [clip.resolve(), anim.resolve()]
         if sys.platform == "darwin":  # the real macOS Trash (NSFileManager via ctypes)
             from epsilon.systrash import move_to_trash
 
@@ -68,6 +87,14 @@ def selftest():
     assert not looks_like_code("Сегодня хорошая погода, пойду гулять.\nА вечером почитаю книгу.")
     import PySide6.QtWidgets  # noqa: F401
     from PySide6.QtPrintSupport import QPrinter  # noqa: F401  (PDF export)
+    # video / audio playback in the attachment viewer: the backend plugin must be bundled
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtMultimedia import QMediaFormat
+
+    app = QCoreApplication.instance() or QCoreApplication([])  # noqa: F841
+    formats = QMediaFormat().supportedFileFormats(QMediaFormat.Decode)
+    print("media formats:", len(formats))
+    assert formats or sys.platform != "darwin", "no QtMultimedia backend"
     print("selftest ok")
     return 0
 
