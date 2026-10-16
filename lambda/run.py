@@ -116,12 +116,22 @@ def selftest():
         ed.saved_i = ed.hist_i  # nothing to ask about on close
     print("lambda selftest ok", json.dumps({"templates": sum(len(v) for v in templates.TEMPLATES.values())}))
     win.close()
+    win.deleteLater()
+    app.processEvents()
+    from lyambda.ui import release_caches
+    release_caches()
+    import gc
+    gc.collect()
     return 0
 
 
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
-        sys.exit(selftest())
+        code = selftest()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        import os
+        os._exit(code)  # every check ran; skip interpreter teardown of Qt objects
     from lyambda.ui import main
 
     sys.exit(main())

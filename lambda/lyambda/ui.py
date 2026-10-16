@@ -431,8 +431,17 @@ class App(QApplication):
         return super().event(e)
 
 
+def release_caches():
+    """Drop module-level Qt objects (text layouts, icon pixmaps, renderer images) before QApplication goes away —
+    destroying them during interpreter shutdown crashes on macOS."""
+    from . import text
+    icons.pixmap.cache_clear()
+    text._cache.clear()
+
+
 def main():
     app = App(sys.argv)
+    app.aboutToQuit.connect(release_caches)
     app.setApplicationName("Lambda")
     app.setApplicationDisplayName(APP_NAME)
     icon = resource_path("assets", "icon.png")
@@ -444,4 +453,10 @@ def main():
     for arg in sys.argv[1:] + app.pending:
         if not arg.startswith("-") and Path(arg).exists():
             win.open_path(arg)
-    return app.exec()
+    code = app.exec()
+    for ed in win.editors:
+        ed.close_windows()
+    win.deleteLater()
+    app.processEvents()
+    release_caches()
+    return code
