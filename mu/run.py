@@ -172,8 +172,13 @@ def selftest():
         assert not pose_thumbnail(doc.model, st.view.selected.values).isNull()
         win.tabs.setCurrentIndex(4)
         live = win.pages["live"]
+        doc.model.meta["idle"] = [{"param": "ParamAngleZ", "center": 0, "amp": 20, "period": 4.0, "phase": 1.5}]
+        live.driver.follow = False
+        live.driver.idle = False
+        live.driver.t0 = __import__("time").monotonic()
         live.driver.step()
         live.driver.step()
+        assert abs(live.driver.values["ParamAngleZ"]) > 10  # the model's own idle loop plays
         assert live.driver.values
         live.canvas.repaint()
         doc.mark_saved()

@@ -80,6 +80,7 @@ class LiveDriver(QObject):
         self.use_mic = False
         self.use_physics = True
         self.idle = True
+        self.own = True        # the model's own idle animation (model.meta['idle'])
         self.gain = 1.0
         self.emotion = {}
         self.emotion_t = 0.0
@@ -150,6 +151,17 @@ class LiveDriver(QObject):
                 self._set(vals, "ParamEyeBallY", -ny, 14, dt)
                 self._set(vals, "ParamBodyAngleX", nx * 10 * 0.6, 3, dt)
                 self._set(vals, "ParamBodyAngleY", -ny * 10 * 0.4, 3, dt)
+        if self.own:
+            for loop in m.meta.get("idle", []) or []:
+                p = self._p(loop.get("param"))
+                if p is None:
+                    continue
+                w = math.sin(2 * math.pi * t / max(0.2, float(loop.get("period", 4.0))) + float(loop.get("phase", 0.0)))
+                pw = float(loop.get("power", 1.0))
+                if pw != 1.0:
+                    w = math.copysign(abs(w) ** pw, w)
+                dev = vals.get(p.id, p.default) - p.default  # mouse follow / emotion stay on top
+                vals[p.id] = p.clamp(float(loop.get("center", p.default)) + float(loop.get("amp", 0.0)) * w + dev)
         if self.idle:
             for pid, amp, f in (("ParamAngleZ", 3.0, 0.21), ("ParamBodyAngleZ", 2.0, 0.17)):
                 p = self._p(pid)
@@ -324,7 +336,8 @@ class LivePage(QWidget):
         v.addWidget(section("Движение"))
         self.cb = {}
         for key, text in (("follow", "Следить за мышью"), ("blink", "Моргать"), ("breath", "Дышать"),
-                          ("idle", "Лёгкое покачивание"), ("use_physics", "Физика волос и одежды")):
+                          ("idle", "Лёгкое покачивание"), ("own", "Своя анимация модели"),
+                          ("use_physics", "Физика волос и одежды")):
             cb = QCheckBox(text)
             cb.setChecked(True)
             cb.toggled.connect(lambda on, k=key: self._flag(k, on))

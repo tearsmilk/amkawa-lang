@@ -213,13 +213,15 @@ def inpaint(rgba, hole, known=None):
         cur_c = pc.reshape(h2, 2, w2, 2, 4).sum(axis=(1, 3))
         cur_w = pw.reshape(h2, 2, w2, 2, 1).sum(axis=(1, 3))
     levels.append((cur_c, cur_w))
-    # pull back up: unknown pixels take the (normalised) coarser estimate
+    # pull back up: unknown pixels take the (normalised) coarser estimate, upsampled smoothly — a plain 2×
+    # repeat leaves a visible mosaic of blocks
     est = levels[-1][0] / np.maximum(levels[-1][1], 1e-6)
     for c, wt in reversed(levels[:-1]):
-        up = np.repeat(np.repeat(est, 2, axis=0), 2, axis=1)[:c.shape[0], :c.shape[1]]
+        up = _blur3(np.repeat(np.repeat(est, 2, axis=0), 2, axis=1)[:c.shape[0], :c.shape[1]])
         local = c / np.maximum(wt, 1e-6)
         k = np.clip(wt, 0, 1)
         est = local * k + up * (1 - k)
+    est = _relax(est, pre, hole, known)
     out_pre = est
     res = a.copy()
     fill_alpha = np.clip(out_pre[:, :, 3], 0, 1)
@@ -227,6 +229,33 @@ def inpaint(rgba, hole, known=None):
     res[hole, :3] = np.clip(rgb[hole], 0, 1)
     res[hole, 3] = 1.0  # the hole was opaque artwork: keep the silhouette solid
     return (res * 255 + 0.5).astype(np.uint8)
+
+
+def _blur3(x):
+    """3×3 box blur with edge padding (H, W, C)."""
+    p = np.pad(x, ((1, 1), (1, 1), (0, 0)), mode="edge")
+    v = p[:-2] + p[1:-1] + p[2:]
+    return (v[:, :-2] + v[:, 1:-1] + v[:, 2:]) / 9.0
+
+
+def _relax(est, pre, hole, known, iters=60):
+    """Membrane smoothing of the filled pixels (known pixels fixed) — removes the last pyramid seams."""
+    ys, xs = np.nonzero(hole)
+    if not len(ys):
+        return est
+    y0, y1 = max(0, ys.min() - 2), min(hole.shape[0], ys.max() + 3)
+    x0, x1 = max(0, xs.min() - 2), min(hole.shape[1], xs.max() + 3)
+    e = est[y0:y1, x0:x1].copy()
+    kn = known[y0:y1, x0:x1]
+    e[kn] = pre[y0:y1, x0:x1][kn]
+    h = hole[y0:y1, x0:x1]
+    for _ in range(iters):
+        p = np.pad(e, ((1, 1), (1, 1), (0, 0)), mode="edge")
+        avg = (p[:-2, 1:-1] + p[2:, 1:-1] + p[1:-1, :-2] + p[1:-1, 2:]) * 0.25
+        e[h] = avg[h]
+    out = est.copy()
+    out[y0:y1, x0:x1][h] = e[h]
+    return out
 
 
 # ====================================================================== cutting
@@ -246,8 +275,11 @@ def cut_to_layer(model, mesh, mask, name, fill_hole=True, copy=False, spacing=DE
     if not copy:
         rest = src.copy()
         if fill_hole:
-            hole = sel.copy()
+            # repaint a thin ring too: the anti-aliased edge of the cut outline would otherwise stay behind as
+            # a dark ghost line when the new layer moves
+            hole = grow(sel, 2) & (src[:, :, 3] > 0)
             rest = inpaint(rest, hole)
+            rest[hole & ~sel, 3] = src[hole & ~sel, 3]
         else:
             rest[sel] = 0
         # a new texture id (the old image stays for undo)
