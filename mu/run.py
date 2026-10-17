@@ -179,6 +179,15 @@ def selftest():
         live.driver.step()
         live.driver.step()
         assert abs(live.driver.values["ParamAngleZ"]) > 10  # the model's own idle loop plays
+        # animation clips and blink bursts
+        live.driver.play_clip({"name": "t", "duration": 5.0, "tracks": {"ParamMouthOpenY": [[0, 1], [5, 1]]}})
+        live.driver.step()
+        assert live.driver.values["ParamMouthOpenY"] > 0.99
+        doc.model.meta["blink"] = {"double": 1.0, "offset": 0.1}
+        live.driver.blinks = []
+        live.driver.plan_blinks(__import__("time").monotonic())
+        assert len(live.driver.blinks) == 4
+        assert abs(live.driver.track_value([[0, 0], [1, 10]], 0.5) - 5.0) < 1e-6
         assert live.driver.values
         live.canvas.repaint()
         doc.mark_saved()

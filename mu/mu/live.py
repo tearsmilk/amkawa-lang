@@ -87,6 +87,9 @@ class LiveDriver(QObject):
         self.smooth = {}
         self.next_blink = time.monotonic() + 2.5
         self.blink_t = None
+        self.blinks = []          # [(eye param id, start time)] — planned single / double / triple blinks
+        self.clip = None          # animation clip being played (model.meta['clips'])
+        self.clip_t0 = 0.0
         self.t0 = time.monotonic()
         self.last = time.monotonic()
         self.target_rect = None   # screen rect the mouse is measured against (None → primary screen)
@@ -107,6 +110,43 @@ class LiveDriver(QObject):
     def stop(self):
         self.timer.stop()
         self.mic.stop()
+
+    def play_clip(self, clip):
+        """Play an animation clip: {'name', 'duration', 'tracks': {param: [[t, v], …]}}."""
+        self.clip = clip
+        self.clip_t0 = time.monotonic()
+
+    @staticmethod
+    def track_value(track, t):
+        if not track:
+            return None
+        if t <= track[0][0]:
+            return float(track[0][1])
+        for (t0, v0), (t1, v1) in zip(track, track[1:]):
+            if t0 <= t <= t1:
+                u = (t - t0) / (t1 - t0) if t1 > t0 else 1.0
+                u = u * u * (3 - 2 * u)
+                return float(v0) + (float(v1) - float(v0)) * u
+        return float(track[-1][1])
+
+    def plan_blinks(self, now):
+        """Next blink burst: 1–3 blinks, each eye a little apart, settings in model.meta['blink']."""
+        cfg = self.model.meta.get("blink", {}) or {}
+        n = 1
+        r = random.random()
+        if r < cfg.get("triple", 0.0):
+            n = 3
+        elif r < cfg.get("triple", 0.0) + cfg.get("double", 0.12):
+            n = 2
+        off = cfg.get("offset", 0.0)
+        eyes = ["ParamEyeLOpen", "ParamEyeROpen"]
+        random.shuffle(eyes)
+        for i in range(n):
+            start = now + i * cfg.get("gap", 0.38)
+            self.blinks.append((eyes[0], start))
+            self.blinks.append((eyes[1], start + random.uniform(0.0, off)))
+        lo, hi = cfg.get("interval", (2.0, 5.5))
+        self.next_blink = now + (n - 1) * cfg.get("gap", 0.38) + random.uniform(lo, hi)
 
     def set_emotion(self, values):
         self.emotion = dict(values or {})
@@ -169,22 +209,32 @@ class LiveDriver(QObject):
                     vals[pid] = p.clamp(vals[pid] + amp * math.sin(t * f * 2 * math.pi))
         if self.breath and self._p("ParamBreath") is not None:
             vals["ParamBreath"] = 0.5 + 0.5 * math.sin(t * 2 * math.pi / 3.4)
+        if self.clip is not None:
+            tc = now - self.clip_t0
+            if tc > float(self.clip.get("duration", 3.0)):
+                self.clip = None
+            else:
+                for pid, track in self.clip.get("tracks", {}).items():
+                    p = self._p(pid)
+                    v = self.track_value(track, tc)
+                    if p is not None and v is not None:
+                        vals[pid] = p.clamp(v)
         if self.blink:
-            if self.blink_t is None and now >= self.next_blink:
-                self.blink_t = now
-            k = 1.0
-            if self.blink_t is not None:
-                ph = (now - self.blink_t) / 0.16
-                if ph >= 2:
-                    self.blink_t = None
-                    self.next_blink = now + random.uniform(2.0, 5.5) * (0.4 if random.random() < 0.15 else 1)
-                else:
-                    k = abs(1 - ph)
-            for pid in ("ParamEyeLOpen", "ParamEyeROpen"):
+            if not self.blinks and now >= self.next_blink:
+                self.plan_blinks(now)
+            ks = {"ParamEyeLOpen": 1.0, "ParamEyeROpen": 1.0}
+            keep = []
+            for pid, start in self.blinks:
+                ph = (now - start) / 0.15
+                if ph < 2:
+                    keep.append((pid, start))
+                    if ph > 0:
+                        ks[pid] = min(ks[pid], abs(1 - ph))
+            self.blinks = keep
+            for pid, k in ks.items():
                 p = self._p(pid)
                 if p is not None:
-                    base = self.emotion.get(pid, p.default)
-                    vals[pid] = p.clamp(base * k)
+                    vals[pid] = p.clamp(vals.get(pid, p.default) * k)
         if self.use_mic and self.mic.stream is not None:
             lvl = min(1.0, self.mic.level * 12.0 * self.gain)
             lvl = 0.0 if lvl < 0.06 else lvl
@@ -374,6 +424,12 @@ class LivePage(QWidget):
         self.emotions.itemClicked.connect(self.pick_emotion)
         v.addWidget(self.emotions)
         v.addSpacing(6)
+        v.addWidget(section("Анимации (клавиши Q W E R T…)"))
+        self.clips = QListWidget()
+        self.clips.setMaximumHeight(160)
+        self.clips.itemClicked.connect(lambda it: self.clip_key(self.clips.row(it)))
+        v.addWidget(self.clips)
+        v.addSpacing(6)
         v.addWidget(section("Кадр и фон"))
         self.crop = QComboBox()
         self.crop.addItem("По пояс", "upper")
@@ -401,6 +457,8 @@ class LivePage(QWidget):
         for i in range(9):
             QShortcut(QKeySequence(str(i + 1)), self, lambda i=i: self.emotion_key(i))
         QShortcut(QKeySequence("0"), self, lambda: self.emotion_key(-1))
+        for i, key in enumerate("QWERTYUIOP"):
+            QShortcut(QKeySequence(key), self, lambda i=i: self.clip_key(i))
 
     def set_doc(self, doc):
         self.doc = doc
@@ -413,6 +471,7 @@ class LivePage(QWidget):
             self.canvas.renderer = doc.renderer
         self.canvas.bg = self.bg.currentData()
         self.fill_emotions()
+        self.fill_clips()
         self.driver.step()
 
     def fill_emotions(self):
@@ -423,6 +482,23 @@ class LivePage(QWidget):
         self._emos = [p for p in self.doc.model.poses if p.get("kind") == "Эмоция"]
         for i, p in enumerate(self._emos):
             self.emotions.addItem(f"{i + 1} · {p['name']}" if i < 9 else p["name"])
+
+    def fill_clips(self):
+        self.clips.clear()
+        self._clips = list(self.doc.model.meta.get("clips", []) or [])
+        for i, c in enumerate(self._clips):
+            key = "QWERTYUIOP"[i] if i < 10 else ""
+            self.clips.addItem(f"{key} · {c.get('name', 'Анимация')}" if key else c.get("name", "Анимация"))
+        if not self._clips:
+            self.clips.addItem("У модели нет анимаций")
+
+    def clip_key(self, i):
+        if self.driver is None or not (0 <= i < len(getattr(self, "_clips", []))):
+            return
+        if not self.driver.timer.isActive():
+            self.toggle()
+        self.driver.play_clip(self._clips[i])
+        self.clips.setCurrentRow(i)
 
     def pick_emotion(self, it):
         row = self.emotions.row(it)
