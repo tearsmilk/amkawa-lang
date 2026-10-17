@@ -263,6 +263,8 @@ class RigPage(QWidget):
         self.density.setToolTip("Плотность авто-сетки (меньше шаг — больше точек)")
         bl.addWidget(self.density)
         bl.addWidget(tool_button("automesh", "Перестроить сетку выбранных слоёв", colors, self.remesh, size=20))
+        bl.addWidget(tool_button("physics", "Риг пряди: деформер, параметры X1…Xn / Y / S и маятник-цепочка "
+                                            "(как физика волос в Cubism)", colors, self.strand_rig, size=20))
         bl.addSpacing(10)
         ar = QPushButton("  Авто-риг")
         ar.setIcon(icons.icon("auto", colors["accent_text"], colors["accent_text"]))
@@ -402,6 +404,51 @@ class RigPage(QWidget):
                                     length=max(60.0, (y1 - y0) * 0.6)))
         self.win.show_status("Перетащите круг — центр вращения, точку на ручке — угол (в ключе параметра)")
 
+    def strand_rig(self):
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox
+        doc = self.win.doc
+        meshes = doc.selected_meshes()
+        for d in doc.selected_deformers():
+            meshes += [x for x in doc.model.meshes() if x.parent == d.id]
+        if not meshes:
+            self.win.show_status("Выберите слои пряди (чёлка, локон, хвостик, ушки, ленточка…)")
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Риг пряди")
+        f = QFormLayout(dlg)
+        name = QLineEdit(meshes[0].name.split(":")[0].strip() or "Прядь")
+        f.addRow("Название", name)
+        segs = QSpinBox()
+        segs.setRange(1, 6)
+        segs.setValue(3)
+        f.addRow("Звеньев (X1…Xn)", segs)
+        direc = QComboBox()
+        for k, t in autorig.DIRECTIONS.items():
+            direc.addItem(f"Растёт {t}", k)
+        f.addRow("Направление", direc)
+        amp = QSpinBox()
+        amp.setRange(4, 60)
+        amp.setValue(22)
+        amp.setSuffix("°")
+        f.addRow("Изгиб звена", amp)
+        phys = QCheckBox("Добавить маятник-цепочку в физику")
+        phys.setChecked(True)
+        f.addRow("", phys)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        f.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        w, ids, g = autorig.rig_strand(doc.model, meshes, name.text().strip() or "Прядь", direc.currentData(),
+                                       segs.value(), float(amp.value()), phys.isChecked())
+        doc.commit()
+        doc.select([w.id])
+        doc.active_param = ids[0]
+        doc.activeParamChanged.emit()
+        self.win.show_status(f"Риг пряди «{name.text()}»: параметры {', '.join(ids)}"
+                             + (" и физика" if g else ""))
+
     def remesh(self):
         doc = self.win.doc
         ms = doc.selected_meshes() or doc.model.meshes()
@@ -444,7 +491,7 @@ class PhysicsPage(QWidget):
         lay.addWidget(mid, 1)
         side = QWidget()
         side.setObjectName("RightPanel")
-        side.setFixedWidth(330)
+        side.setFixedWidth(400)
         sv = QVBoxLayout(side)
         sv.setContentsMargins(0, 0, 0, 0)
         self.panel = PhysicsPanel(doc, colors)

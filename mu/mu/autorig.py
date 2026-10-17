@@ -384,10 +384,11 @@ def autorig(model, replace=True):
 
     physics = []
     if skirt_w is not None:
-        sway(skirt_w, "ParamSkirt", 46, 1.8)
-        physics.append(PhysGroup(name="Юбка", inputs=[{"param": "ParamBodyAngleX", "weight": 1.0, "kind": "x"},
-                                                       {"param": "ParamBodyAngleZ", "weight": 0.6, "kind": "angle"}],
-                                 output="ParamSkirt", scale=1.0, stiffness=40, damping=5, gravity=0.5))
+        ids = ["ParamSkirt", "ParamSkirt2"]
+        model.add_param(Param("ParamSkirt2", "Юбка 2", -1, 1, 0, "Тело"))
+        x0, y0, ww, hh = skirt_w.rect
+        chain_keys(skirt_w, (x0 + ww / 2, y0), (x0 + ww / 2, y0 + hh), ids, 12.0)
+        physics.append(strand_group("Юбка", ids, stiffness=40, damping=5, gravity=0.5, body=True))
 
     if face is not None:
         _rig_head(model, R, head, face, S, cx, sway, physics)
@@ -418,17 +419,19 @@ def _rig_head(model, R, head, face, S, cx, sway, physics):
     turn(head["face"], 1.0)
     turn(head["feat"], 0.55)
     _keys_rot(head["rot"], "ParamAngleZ", {-30: -16.0, 0: 0.0, 30: 16.0})
-    phys = {"bangs": ("Чёлка", "ParamHairFront", 26, 1.6, 70, 8, 0.5, 1.1),
-            "side_hair": ("Пряди", "ParamHairSide", 44, 1.6, 45, 5, 0.7, 1.3),
-            "back_hair": ("Волосы сзади", "ParamHairBack", 54, 1.3, 30, 4, 0.8, 1.2)}
+    phys = {"bangs": ("Чёлка", "ParamHairFront", 12, 70, 8, 0.5, 1.0),
+            "side_hair": ("Пряди", "ParamHairSide", 16, 45, 5, 0.7, 1.1),
+            "back_hair": ("Волосы сзади", "ParamHairBack", 14, 30, 4, 0.8, 1.0)}
     for role, (w, depth) in ((k, v) for k, v in head.items() if k in phys):
         turn(w, depth)
-        title, pid, amp, power, stiff, damp, grav, scale = phys[role]
-        sway(w, pid, amp, power)
-        physics.append(PhysGroup(name=title, inputs=[{"param": "ParamAngleX", "weight": 0.6, "kind": "x"},
-                                                     {"param": "ParamAngleZ", "weight": 0.5, "kind": "angle"},
-                                                     {"param": "ParamBodyAngleX", "weight": 0.4, "kind": "x"}],
-                                 output=pid, scale=scale, stiffness=stiff, damping=damp, gravity=grav))
+        title, pid, amp, stiff, damp, grav, scale = phys[role]
+        # Cubism-style: X1 near the roots … X3 at the tips, driven by a 3-link pendulum
+        ids = [pid, pid + "2", pid + "3"]
+        for i, q in enumerate(ids[1:], 2):
+            model.add_param(Param(q, f"{title} {i}", -1, 1, 0, "Волосы"))
+        x0, y0, ww, hh = w.rect
+        chain_keys(w, (x0 + ww / 2, y0), (x0 + ww / 2, y0 + hh), ids, amp)
+        physics.append(strand_group(title, ids, stiffness=stiff, damping=damp, gravity=grav, scale=scale))
 
     # ---------------------------------------------------------------- eyes
     for side in ("l", "r"):
@@ -596,3 +599,117 @@ def _lower_profile(pts, bins=12):
     if len(xs) < 2:
         return np.array([x0, x1 + 1]), np.array([pts[:, 1].max()] * 2)
     return np.array(xs), np.array(ys)
+
+
+# ====================================================================== strand rig (Cubism-style hair physics)
+DIRECTIONS = {"down": "вниз", "up": "вверх", "left": "влево", "right": "вправо"}
+
+
+def chain_keys(warp, root, tip, ids, amp_deg=22.0, y_id=None, s_id=None):
+    """Keyforms on `warp` for a strand running from `root` to `tip`: ids[i] bends everything below link i (−1…1
+    ⇒ ±amp_deg), y_id stretches the strand, s_id waves it into an S. Bends add up, so driving X1…Xn from a
+    pendulum chain gives the wave that runs down the hair."""
+    root = np.asarray(root, float)
+    tip = np.asarray(tip, float)
+    axis = tip - root
+    length = float(np.hypot(*axis)) or 1.0
+    u = axis / length
+    nrm = np.array([-u[1], u[0]])
+    n = len(ids)
+
+    def along(p):
+        return ((p - root) @ u) / length
+
+    for i, pid in enumerate(ids):
+        lo = i / n
+        piv = root + u * length * lo
+
+        def bend(p, k, lo=lo, piv=piv):
+            s = along(p)
+            w = np.clip((s - lo) / (0.6 / n), 0, 1)
+            w = w * w * (3 - 2 * w)
+            ang = math.radians(amp_deg) * k
+            c, si = math.cos(ang), math.sin(ang)
+            d = p - piv
+            r = np.stack([c * d[:, 0] - si * d[:, 1], si * d[:, 0] + c * d[:, 1]], 1)
+            return (r - d) * w[:, None]
+        _keys_fn(warp, pid, [-1, 0, 1], bend)
+    if y_id:
+        def stretch(p, k):
+            s = np.clip(along(p), 0, 1.3)
+            return np.outer(k * 0.12 * length * s ** 1.5, u)
+        _keys_fn(warp, y_id, [-1, 0, 1], stretch)
+    if s_id:
+        def swave(p, k):
+            s = np.clip(along(p), 0, 1.3)
+            return np.outer(k * 0.06 * length * np.sin(2 * np.pi * s) * s, nrm)
+        _keys_fn(warp, s_id, [-1, 0, 1], swave)
+
+
+def strand_ends(box, direction):
+    if direction == "up":
+        return (box.cx, box.y1), (box.cx, box.y0)
+    if direction == "left":
+        return (box.x1, box.cy), (box.x0, box.cy)
+    if direction == "right":
+        return (box.x0, box.cy), (box.x1, box.cy)
+    return (box.cx, box.y0), (box.cx, box.y1)
+
+
+def strand_group(title, ids, stiffness=40.0, damping=4.5, gravity=0.6, scale=1.0, body=False):
+    inputs = [{"param": "ParamAngleX", "weight": 0.6, "kind": "x"},
+              {"param": "ParamAngleZ", "weight": 0.6, "kind": "angle"},
+              {"param": "ParamBodyAngleX", "weight": 0.4, "kind": "x"},
+              {"param": "ParamBodyAngleZ", "weight": 0.4, "kind": "angle"}]
+    if body:
+        inputs = inputs[2:]
+    return PhysGroup(name=title, inputs=inputs, output=ids[0], scale=scale, stiffness=stiffness, damping=damping,
+                     gravity=gravity, segments=len(ids),
+                     outputs=[{"param": pid, "vertex": i + 1, "kind": "angle", "scale": 1.0} for i, pid in enumerate(ids)])
+
+
+def _strand_ids(model, prefix, title, segments, group="Волосы"):
+    base = "Param" + "".join(ch for ch in prefix if ch.isalnum())
+    ids = []
+    for i in range(segments):
+        pid = f"{base}X{i + 1}"
+        model.add_param(Param(pid, f"{title} X{i + 1}", -1, 1, 0, group))
+        ids.append(pid)
+    y_id, s_id = f"{base}Y", f"{base}S"
+    model.add_param(Param(y_id, f"{title} Y (длина)", -1, 1, 0, group))
+    model.add_param(Param(s_id, f"{title} S (изгиб)", -1, 1, 0, group))
+    return ids, y_id, s_id
+
+
+def rig_strand(model, meshes, title="Прядь", direction="down", segments=3, amp_deg=22.0, physics=True,
+               stiffness=40.0, damping=4.5, gravity=0.6):
+    """Wrap layers into a warp deformer and give it a Cubism-style strand rig: X1…Xn bends, Y length, S curve and a
+    pendulum chain driving X1…Xn. Returns (warp, ids, group)."""
+    meshes = [m for m in meshes if isinstance(m, ArtMesh) and len(m.rest)]
+    if not meshes:
+        raise ValueError("Выберите слои пряди")
+    box = _box(meshes)
+    pad = 0.12 * max(box.w, box.h)
+    parents = {m.parent for m in meshes}
+    parent = parents.pop() if len(parents) == 1 else None
+    longer = box.h >= box.w if direction in ("down", "up") else box.w > box.h
+    rows, cols = (8, 4) if (direction in ("down", "up")) or not longer else (4, 8)
+    w = WarpDeformer(name=f"{title}: физика", parent=parent, rect=box.rect(pad), rows=rows, cols=cols)
+    model.add(w)
+    for m in meshes:
+        m.parent = w.id
+    used = {p.id for p in model.params}
+    prefix = title
+    k = 2
+    while any(p.startswith("Param" + "".join(ch for ch in prefix if ch.isalnum()) + "X") for p in used):
+        prefix = f"{title}{k}"
+        k += 1
+    ids, y_id, s_id = _strand_ids(model, prefix, title, segments)
+    root, tip = strand_ends(box, direction)
+    chain_keys(w, root, tip, ids, amp_deg, y_id, s_id)
+    g = None
+    if physics:
+        g = strand_group(title, ids, stiffness, damping, gravity)
+        model.physics.append(g)
+    model.invalidate()
+    return w, ids, g

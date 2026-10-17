@@ -77,7 +77,7 @@ def export_inp(model, path, include_physics=True):
     head_node = {"uuid": _uid(rng, used), "name": "Движение головы (для физики)", "type": "Node", "enabled": True,
                  "zsort": 0.0, "transform": {"trans": [0.0, -cy * 0.45, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0]},
                  "lockToRoot": False, "children": []}
-    phys_outputs = {g.output for g in model.physics} if include_physics else set()
+    phys_outputs = {o["param"] for g in model.physics for o in g.out_list()} if include_physics else set()
     for p in model.params:
         keys = set()
         for node in model.nodes.values():
@@ -139,17 +139,22 @@ def export_inp(model, path, include_physics=True):
 
     if include_physics:
         for g in model.physics:
-            out = model.param(g.output)
-            if out is None or not hasattr(out, "_inp_uuid"):
-                continue
-            span = max(abs(out.max - out.default), abs(out.min - out.default)) or 1.0
-            head_node["children"].append({
-                "uuid": _uid(rng, used), "name": "Физика: " + g.name, "type": "SimplePhysics", "enabled": True,
-                "zsort": 0.0, "transform": {"trans": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0]},
-                "lockToRoot": False, "param": out._inp_uuid, "model_type": "pendulum", "map_mode": "angle_length",
-                "gravity": 1.0, "length": 120.0, "frequency": round(0.6 + g.stiffness / 80, 3),
-                "angle_damping": round(min(1.0, g.damping / 10), 3), "length_damping": 0.5,
-                "output_scale": [round(5.0 * g.scale * span, 3), 1.0], "local_only": False})
+            # Inochi2D has single pendulums: one per output, longer (slower) further down the chain
+            for o in g.out_list():
+                out = model.param(o.get("param"))
+                if out is None or not hasattr(out, "_inp_uuid"):
+                    continue
+                vtx = max(1, int(o.get("vertex", 1)))
+                span = max(abs(out.max - out.default), abs(out.min - out.default)) or 1.0
+                head_node["children"].append({
+                    "uuid": _uid(rng, used), "name": f"Физика: {g.name} {vtx}", "type": "SimplePhysics",
+                    "enabled": True, "zsort": 0.0,
+                    "transform": {"trans": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0]},
+                    "lockToRoot": False, "param": out._inp_uuid, "model_type": "pendulum", "map_mode": "angle_length",
+                    "gravity": 1.0, "length": 120.0 * vtx, "frequency": round((0.6 + g.stiffness / 80) / vtx ** 0.5, 3),
+                    "angle_damping": round(min(1.0, g.damping / 10), 3), "length_damping": 0.5,
+                    "output_scale": [round(5.0 * g.scale * float(o.get("scale", 1.0)) * span, 3), 1.0],
+                    "local_only": False})
     for p in model.params:
         if hasattr(p, "_inp_uuid"):
             del p._inp_uuid

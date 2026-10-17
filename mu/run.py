@@ -44,6 +44,31 @@ def selftest():
     wave = model.evaluate()
     assert wave.meshes[hand.id][0][:, 1].mean() < rest.meshes[hand.id][0][:, 1].mean() - 200  # the hand is raised
     report["autorig"] = len(model.deformers())
+    # Cubism-style hair physics: 3-link chains, the tips lag behind the roots
+    hair = next(g for g in model.physics if g.name == "Чёлка")
+    assert hair.segments == 3 and [o["vertex"] for o in hair.out_list()] == [1, 2, 3]
+    from mu.physics import PhysicsSim
+    sim = PhysicsSim(model)
+    vals = {p.id: p.default for p in model.params}
+    trace = []
+    for f in range(60):
+        vals["ParamAngleX"] = 30.0 if 2 <= f < 30 else 0.0
+        sim.step(0.02, vals)
+        trace.append([vals[o["param"]] for o in hair.out_list()])
+    trace = np.array(trace)
+    assert np.abs(trace).max() > 0.2
+    assert np.argmax(np.abs(trace[:, 0])) < np.argmax(np.abs(trace[:, 2]))  # the wave reaches the tips later
+    # strand rig on any layer (here: the ribbon)
+    ribbon = next(m for m in model.meshes() if m.role == "hair_acc")
+    sw, sids, sg = autorig.rig_strand(model, [ribbon], "Бантик", "down", 2)
+    assert ribbon.parent == sw.id and len(sids) == 2 and sg.segments == 2
+    v2 = {p.id: p.default for p in model.params}
+    v2[sids[1]] = 1.0
+    moved = model.evaluate(v2).meshes[ribbon.id][0] - model.evaluate().meshes[ribbon.id][0]
+    assert np.abs(moved).max() > 3
+    phys3 = moc3.physics3(model)
+    chain_setting = next(st for st in phys3["PhysicsSettings"] if len(st["Output"]) == 3)
+    assert len(chain_setting["Vertices"]) == 4
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp).resolve()

@@ -1,8 +1,8 @@
 """Side panels: parts tree, parameters (sliders + keys), inspector, physics groups and poses."""
 import base64
 
-from PySide6.QtCore import QByteArray, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
+from PySide6.QtCore import QByteArray, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QFrame,
                                QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
                                QPushButton, QScrollArea, QSlider, QSpinBox, QToolButton, QTreeWidget, QTreeWidgetItem,
@@ -756,11 +756,20 @@ class PhysicsPanel(QWidget):
         lay.addLayout(head)
         self.list = QListWidget()
         self.list.currentRowChanged.connect(self.show_group)
-        self.list.setMaximumHeight(170)
+        self.list.setMaximumHeight(120)
         lay.addWidget(self.list)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        body = QWidget()
+        body.setObjectName("InspectorBody")
+        outer = QVBoxLayout(body)
+        outer.setContentsMargins(0, 0, 4, 0)
         self.form_host = QVBoxLayout()
-        lay.addLayout(self.form_host)
-        lay.addStretch(1)
+        outer.addLayout(self.form_host)
+        outer.addStretch(1)
+        scroll.setWidget(body)
+        lay.addWidget(scroll, 1)
         doc.modelChanged.connect(self.rebuild)
         self._lock = False
         self.rebuild()
@@ -817,12 +826,12 @@ class PhysicsPanel(QWidget):
         en.setChecked(g.enabled)
         en.toggled.connect(lambda on: self.set(g, "enabled", on))
         f.addRow("", en)
-        out = QComboBox()
-        for p in m.params:
-            out.addItem(p.name, p.id)
-        out.setCurrentIndex(max(0, out.findData(g.output)))
-        out.currentIndexChanged.connect(lambda _: self.set(g, "output", out.currentData()))
-        f.addRow("Выход", out)
+        segs = QSpinBox()
+        segs.setRange(1, 8)
+        segs.setValue(g.segments)
+        segs.setToolTip("Звенья маятника: у каждого свой выход — по волосам идёт волна с запаздыванием")
+        segs.valueChanged.connect(lambda v: self.set_segments(g, v))
+        f.addRow("Звеньев", segs)
         for attr, title, lo, hi, step in (("stiffness", "Жёсткость", 5, 200, 5), ("damping", "Затухание", 0.5, 30, 0.5),
                                           ("gravity", "Гравитация", 0, 2, 0.1), ("scale", "Размах", 0.1, 3, 0.1)):
             s = QDoubleSpinBox()
@@ -864,6 +873,48 @@ class PhysicsPanel(QWidget):
         add = QPushButton("+ вход")
         add.clicked.connect(lambda: self.add_input(g))
         self.form_host.addWidget(add)
+        self.form_host.addWidget(section("Выходы (звено → параметр)"))
+        for k, o in enumerate(g.out_list()):
+            row = QHBoxLayout()
+            pc = QComboBox()
+            for p in m.params:
+                pc.addItem(p.name, p.id)
+            pc.setCurrentIndex(max(0, pc.findData(o.get("param"))))
+            pc.currentIndexChanged.connect(lambda _, k=k, pc=pc: self.set_output(g, k, "param", pc.currentData()))
+            vx = QSpinBox()
+            vx.setRange(1, max(1, g.segments))
+            vx.setValue(max(1, min(g.segments, int(o.get("vertex", g.segments)))))
+            vx.setToolTip("Номер звена")
+            vx.valueChanged.connect(lambda v, k=k: self.set_output(g, k, "vertex", v))
+            kd = QComboBox()
+            kd.addItem("угол", "angle")
+            kd.addItem("сдвиг", "x")
+            kd.setCurrentIndex(1 if o.get("kind") == "x" else 0)
+            kd.currentIndexChanged.connect(lambda _, k=k, kd=kd: self.set_output(g, k, "kind", kd.currentData()))
+            sc = QDoubleSpinBox()
+            sc.setRange(-3, 3)
+            sc.setSingleStep(0.1)
+            sc.setValue(float(o.get("scale", 1.0)))
+            sc.valueChanged.connect(lambda v, k=k: self.set_output(g, k, "scale", v))
+            rm = QToolButton()
+            rm.setText("×")
+            rm.clicked.connect(lambda _=False, k=k: self.del_output(g, k))
+            row.addWidget(pc, 1)
+            row.addWidget(vx)
+            row.addWidget(kd)
+            row.addWidget(sc)
+            row.addWidget(rm)
+            holder = QWidget()
+            holder.setLayout(row)
+            self.form_host.addWidget(holder)
+        addo = QPushButton("+ выход")
+        addo.clicked.connect(lambda: self.add_output(g))
+        self.form_host.addWidget(addo)
+        self.chain = ChainView(self.doc, g, self.c)
+        self.form_host.insertWidget(0, self.chain)
+        for cb in self.findChildren(QComboBox):
+            cb.setMinimumContentsLength(5)
+            cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
 
     def set(self, g, attr, value, quiet=False):
         setattr(g, attr, value)
@@ -872,6 +923,42 @@ class PhysicsPanel(QWidget):
 
     def set_input(self, inp, key, value):
         inp[key] = value
+
+    def _materialize(self, g):
+        if not g.outputs:
+            g.outputs = [dict(o) for o in g.out_list()]
+
+    def set_segments(self, g, n):
+        g.segments = n
+        self._materialize(g)
+        for o in g.outputs:
+            o["vertex"] = min(int(o.get("vertex", n)), n)
+        self.doc.physics.reset()
+        self.commit()
+        self.show_group(self.list.currentRow())
+
+    def set_output(self, g, k, key, value):
+        self._materialize(g)
+        if 0 <= k < len(g.outputs):
+            g.outputs[k][key] = value
+            if key == "param" and k == 0:
+                g.output = value
+
+    def add_output(self, g):
+        self._materialize(g)
+        pid = g.outputs[-1]["param"] if g.outputs else (self.doc.model.params[0].id if self.doc.model.params else "")
+        g.outputs.append({"param": pid, "vertex": g.segments, "kind": "angle", "scale": 1.0})
+        self.commit()
+        self.show_group(self.list.currentRow())
+
+    def del_output(self, g, k):
+        self._materialize(g)
+        if 0 <= k < len(g.outputs):
+            g.outputs.pop(k)
+            if g.outputs:
+                g.output = g.outputs[0]["param"]
+        self.commit()
+        self.show_group(self.list.currentRow())
 
     def add_input(self, g):
         g.inputs.append({"param": "ParamAngleX", "weight": 0.5, "kind": "x"})
@@ -910,6 +997,48 @@ class PhysicsPanel(QWidget):
         if 0 <= i < len(self.doc.model.physics):
             self.doc.model.physics.pop(i)
             self.doc.commit()
+
+
+class ChainView(QWidget):
+    """Live drawing of a physics group's pendulum chain (like Cubism's physics window)."""
+
+    def __init__(self, doc, group, colors, parent=None):
+        super().__init__(parent)
+        self.doc, self.g, self.c = doc, group, colors
+        self.setMinimumHeight(170)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update)
+        self.timer.start(33)
+
+    def paintEvent(self, e):
+        import math
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(self.c["card"]))
+        p.setPen(QPen(QColor(self.c["border"]), 1))
+        p.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 8, 8)
+        n = max(1, int(self.g.segments))
+        th = self.doc.physics.chain_points(self.g.id) or [0.0] * n
+        L = (self.height() - 30) / n
+        x, y = self.width() / 2, 14.0
+        p.setPen(QPen(QColor(self.c["muted"]), 1, Qt.DashLine))
+        p.drawLine(int(x), 8, int(x), self.height() - 8)
+        pts = [(x, y)]
+        for a in th[:n]:
+            x += L * math.sin(a)
+            y += L * math.cos(a)
+            pts.append((x, y))
+        p.setPen(QPen(QColor(self.c["accent"]), 2.4, Qt.SolidLine, Qt.RoundCap))
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            p.drawLine(int(x0), int(y0), int(x1), int(y1))
+        p.setBrush(QColor(self.c["accent"]))
+        p.setPen(Qt.NoPen)
+        for i, (px, py) in enumerate(pts):
+            r = 5 if i == 0 else 4
+            p.drawEllipse(QRectF(px - r, py - r, 2 * r, 2 * r))
+        p.setPen(QColor(self.c["muted"]))
+        p.drawText(8, self.height() - 8, "Маятник — включите «Проверку»")
+        p.end()
 
 
 # ====================================================================== poses

@@ -269,22 +269,35 @@ NODE_TYPES = {"mesh": ArtMesh, "warp": WarpDeformer, "rot": RotationDeformer}
 
 # ====================================================================== physics / poses
 class PhysGroup:
+    """A physics pendulum: inputs (head / body parameters) move its root, a chain of `segments` links swings with
+    gravity, and every output takes the bend at one link (vertex) into a parameter — like Cubism physics, where
+    X1 follows the root and X3 the tips, so a wave runs down the hair."""
+
     def __init__(self, gid=None, name="Физика", inputs=None, output="", scale=1.0, stiffness=60.0, damping=7.0,
-                 gravity=0.6, enabled=True):
+                 gravity=0.6, enabled=True, segments=1, outputs=None):
         self.id = gid or new_id("ph")
         self.name = name
         self.inputs = list(inputs or [])   # [{"param": id, "weight": 1.0, "kind": "x" | "angle"}]
         self.output = output
         self.scale, self.stiffness, self.damping, self.gravity, self.enabled = scale, stiffness, damping, gravity, enabled
+        self.segments = max(1, int(segments))
+        self.outputs = list(outputs or [])  # [{"param": id, "vertex": 1…segments, "kind": "angle" | "x", "scale": 1}]
+
+    def out_list(self):
+        if self.outputs:
+            return self.outputs
+        return [{"param": self.output, "vertex": self.segments, "kind": "angle", "scale": 1.0}] if self.output else []
 
     def to_dict(self):
         return {"id": self.id, "name": self.name, "inputs": self.inputs, "output": self.output, "scale": self.scale,
-                "stiffness": self.stiffness, "damping": self.damping, "gravity": self.gravity, "enabled": self.enabled}
+                "stiffness": self.stiffness, "damping": self.damping, "gravity": self.gravity, "enabled": self.enabled,
+                "segments": self.segments, "outputs": self.outputs}
 
     @classmethod
     def from_dict(cls, d):
         return cls(d.get("id"), d.get("name", "Физика"), d.get("inputs"), d.get("output", ""), d.get("scale", 1.0),
-                   d.get("stiffness", 60.0), d.get("damping", 7.0), d.get("gravity", 0.6), d.get("enabled", True))
+                   d.get("stiffness", 60.0), d.get("damping", 7.0), d.get("gravity", 0.6), d.get("enabled", True),
+                   d.get("segments", 1), d.get("outputs"))
 
 
 # ====================================================================== evaluation helpers

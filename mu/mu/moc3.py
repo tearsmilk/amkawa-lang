@@ -13,7 +13,7 @@ art meshes, parameters, keyforms and keyform bindings. Мю's model maps onto it
 * every art mesh is double-sided; textures are packed into 2048 / 4096 atlases.
 
 Mu-specific things Cubism has no equivalent for are approximated: blend modes other than add / multiply
-become normal. Physics is written as one pendulum per physics group."""
+become normal. Physics groups become Cubism physics settings (a vertex per chain link, an output per parameter)."""
 import itertools
 import json
 import math
@@ -521,10 +521,11 @@ class _Exporter:
 
 
 def physics3(model):
+    """Cubism physics: one setting per group, a vertex per chain link, an output per parameter."""
     settings, names, n_in, n_out, n_v = [], [], 0, 0, 0
-    for i, g in enumerate(model.physics):
-        out = model.param(g.output)
-        if out is None or not g.enabled:
+    for g in model.physics:
+        outs = [o for o in g.out_list() if model.param(o.get("param")) is not None]
+        if not outs or not g.enabled:
             continue
         sid = f"PhysicsSetting{len(settings) + 1}"
         names.append({"Id": sid, "Name": g.name})
@@ -535,23 +536,30 @@ def physics3(model):
             inputs.append({"Source": {"Target": "Parameter", "Id": inp["param"]},
                            "Weight": round(min(100.0, 100 * inp.get("weight", 1.0)), 1),
                            "Type": "Angle" if inp.get("kind") == "angle" else "X", "Reflect": False})
-        span = max(abs(out.max - out.default), abs(out.min - out.default)) or 1.0
         # softer springs swing longer: map Мю's stiffness / damping onto the pendulum's delay / mobility
         delay = max(0.5, min(1.2, 0.6 + 12.0 / max(10.0, g.stiffness)))
         mobility = max(0.8, min(0.98, 1.0 - g.damping / 80.0))
+        n = max(1, int(g.segments))
+        seg = (3 + 6 * g.gravity) / n
+        vertices = [{"Position": {"X": 0, "Y": 0}, "Mobility": 1, "Delay": 1, "Acceleration": 1, "Radius": 0}]
+        for i in range(1, n + 1):
+            vertices.append({"Position": {"X": 0, "Y": round(seg * i, 3)}, "Mobility": round(mobility, 3),
+                             "Delay": round(delay, 3), "Acceleration": 1.5, "Radius": round(seg, 3)})
+        outputs = []
+        for o in outs:
+            p = model.param(o["param"])
+            span = max(abs(p.max - p.default), abs(p.min - p.default)) or 1.0
+            outputs.append({"Destination": {"Target": "Parameter", "Id": p.id},
+                            "VertexIndex": max(1, min(n, int(o.get("vertex", n)))),
+                            "Scale": round(1.5 * g.scale * float(o.get("scale", 1.0)) * span, 3), "Weight": 100,
+                            "Type": "X" if o.get("kind") == "x" else "Angle", "Reflect": False})
         settings.append({
-            "Id": sid, "Input": inputs,
-            "Output": [{"Destination": {"Target": "Parameter", "Id": out.id}, "VertexIndex": 1,
-                        "Scale": round(1.5 * g.scale * span / 1.0, 3), "Weight": 100, "Type": "Angle",
-                        "Reflect": False}],
-            "Vertices": [{"Position": {"X": 0, "Y": 0}, "Mobility": 1, "Delay": 1, "Acceleration": 1, "Radius": 0},
-                         {"Position": {"X": 0, "Y": 3 + 6 * g.gravity}, "Mobility": round(mobility, 3),
-                          "Delay": round(delay, 3), "Acceleration": 1.5, "Radius": round(3 + 6 * g.gravity, 2)}],
+            "Id": sid, "Input": inputs, "Output": outputs, "Vertices": vertices,
             "Normalization": {"Position": {"Minimum": -10, "Default": 0, "Maximum": 10},
                               "Angle": {"Minimum": -10, "Default": 0, "Maximum": 10}}})
         n_in += len(inputs)
-        n_out += 1
-        n_v += 2
+        n_out += len(outputs)
+        n_v += len(vertices)
     return {"Version": 3,
             "Meta": {"PhysicsSettingCount": len(settings), "TotalInputCount": n_in, "TotalOutputCount": n_out,
                      "VertexCount": n_v, "EffectiveForces": {"Gravity": {"X": 0, "Y": -1}, "Wind": {"X": 0, "Y": 0}},
