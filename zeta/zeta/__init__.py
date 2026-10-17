@@ -1,0 +1,5 @@
+"""Дзета (ζ) — a pixel-art and animation editor in the spirit of Aseprite, Claude-style UI, macOS 11+ Intel."""
+APP_NAME = "Дзета"
+APP_ID = "Zeta"
+LOGO = "ζ"
+__version__ = "1.0.0"

@@ -1,0 +1,7 @@
+# Runtime (pinned to the last versions that ship macOS 11 / Intel x86_64 wheels)
+numpy==1.26.4
+scipy==1.13.1
+sounddevice==0.5.1
+PySide6-Essentials==6.7.3
+torch==2.2.2
+certifi
