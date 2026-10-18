@@ -103,6 +103,8 @@ QListWidget::item:hover {{ background: {c['hover']}; }}
 #CardTitle {{ font-family: {SERIF}; font-size: 16px; }}
 #Box {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 14px; }}
 #ReplayOn {{ background: {c['card']}; border: 1px solid {c['accent']}; border-radius: 14px; }}
+#CollapseBtn {{ font-size: 16px; color: {c['muted']}; padding: 0 6px; }}
+#UploadTile {{ background: {c['panel']}; border: 1px dashed {c['faint']}; border-radius: 8px; color: {c['muted']}; }}
 #Tile {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 12px; }}
 #Tile:hover {{ border: 1px solid {c['accent']}; }}
 #H3 {{ font-family: {SERIF}; font-size: 16px; }}

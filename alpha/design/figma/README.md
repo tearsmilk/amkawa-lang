@@ -7,7 +7,8 @@
 
 1. `01_ui_kit.js` — страница **UI Kit**: токены (коллекции «Alpha — Light» / «Alpha — Dark», зеркало `alpha/theme.py`),
    иконка α, компоненты: Card (обычная, с метками и участниками, просрочена, выполнена, с обложкой), List column,
-   Label pills, Board tile, Composer, Popup «Метки», Rule row, Side button, Due chip.
+   Label pills, Board tile, Composer, Popup «Метки», Rule row, Side button, Due chip, Background picker
+   (картинки, свои картинки, градиенты, затемнение), Side rail (свёрнутая боковая панель).
 2. `02_screens.js` — страница **Screens**:
 
 | Экран | Темы | В приложении |

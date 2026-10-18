@@ -6,7 +6,8 @@ terracotta accent, serif headings, Russian UI). macOS 11+ Intel x64, built into 
 
 | Area | What it does |
 |---|---|
-| Boards | Home with starred / all boards and templates (Канбан, Учёба, Спринт, Личные дела, Контент-план), backgrounds (gradients, colours, own picture), copy, close / reopen, board as template |
+| Boards | Home with starred / all boards and templates (Канбан, Учёба, Спринт, Личные дела, Контент-план); backgrounds: 8 painted picture scenes, your own pictures (copied into a gallery, or just dropped from Finder onto the board), gradients, colours, dim slider; copy, close / reopen, board as template |
+| Navigation | Middle-button drag pans the board in any direction (sideways — the board, up / down — the list under the cursor), a wheel click starts Windows-style autoscroll, left-drag on empty board space pans, vertical wheel over the board scrolls sideways; the left side bar collapses to an icon rail (⌘\\) |
 | Lists | Drag to reorder, rename inline, WIP limit, colour, copy, sort, move all cards, archive all / archive the list |
 | Cards | Drag between / within lists (placeholder like Trello), labels (10 Trello colours), members, start / due + done + reminder, Markdown description, checklists (progress, hide checked), attachments (files, links, image covers), colour covers, custom fields (text / number / date / checkbox / list), comments, votes, activity, move / copy (also to another board), card templates, archive |
 | Views | Доска, Таблица (sortable), Календарь (drop a card on a day to change the due date), Дашборд (cards per list / label / member / due status) |

@@ -20,28 +20,17 @@ def font(px, bold=False, serif=False, italic=False):
     return f
 
 
-def paint_background(p, rect, bg):
-    """Board background: a key from theme.BACKGROUNDS, a #hex colour or an image path."""
-    if bg and not str(bg).startswith("#") and bg not in theme.BACKGROUNDS and Path(bg).exists():
-        pix = _image(bg, 0)
-        if not pix.isNull():
-            sc = pix.scaled(rect.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-            p.drawPixmap(rect.x() - (sc.width() - rect.width()) // 2, rect.y() - (sc.height() - rect.height()) // 2,
-                         sc)
-            p.fillRect(rect, QColor(0, 0, 0, 30))
-            return
-    a, b = theme.BACKGROUNDS.get(bg, (bg, bg)) if bg else theme.BACKGROUNDS["terracotta"]
-    if not str(a).startswith("#"):
-        a, b = theme.BACKGROUNDS["terracotta"]
-    g = QLinearGradient(QPointF(rect.topLeft()), QPointF(rect.bottomRight()))
-    g.setColorAt(0, QColor(a))
-    g.setColorAt(1, QColor(b))
-    p.fillRect(rect, g)
+def paint_background(p, rect, bg, dim=0):
+    """Board background: gradient key, #hex colour, painted scene or picture (see backgrounds.py)."""
+    from . import backgrounds
+
+    backgrounds.paint(p, rect, bg, dim)
 
 
 def bg_is_light(bg):
-    a, _ = theme.BACKGROUNDS.get(bg, (bg, bg)) if bg in theme.BACKGROUNDS or str(bg).startswith("#") else ("#333", "")
-    return QColor(a).lightness() > 170
+    from . import backgrounds
+
+    return backgrounds.is_light(bg)
 
 
 @lru_cache(maxsize=256)

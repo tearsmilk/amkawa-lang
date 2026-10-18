@@ -164,6 +164,68 @@ def selftest():
     assert "метка" in ed.preview.text()
     ed.save()
     ad.close()
+    # picture backgrounds: painted scene, own picture (copied into the gallery), dim
+    from PySide6.QtGui import QImage
+
+    from alpha import backgrounds
+
+    assert not backgrounds.scene("mountains").isNull() and backgrounds.is_picture("scene:sea")
+    win.open_board(b.id)
+    page = win.board_page
+    pic = os.path.join(tmp, "photo.png")
+    img = QImage(640, 400, QImage.Format_RGB32)
+    img.fill(0x3B6A8F)
+    img.save(pic)
+    page.set_background_file(pic)
+    assert b.d["bg"] in backgrounds.gallery() and os.path.dirname(b.d["bg"]) != tmp
+    b.d["prefs"]["bg_dim"] = 30
+    page.grab()
+    page.board_view.grab()
+    from alpha.ui import BackgroundPicker
+
+    picker = BackgroundPicker(b.d["bg"])
+    picker.pick("scene:night")
+    assert picker.current == "scene:night"
+    # the side bar collapses to a rail and back
+    win.toggle_sidebar()
+    app.processEvents()
+    assert win.side.isHidden() and not win.rail.isHidden()
+    win.toggle_sidebar()
+    assert not win.side.isHidden() and win.rail.isHidden()
+    # wheel navigation: middle-button drag pans, a wheel click starts autoscroll; left-drag on empty board pans
+    from PySide6.QtCore import QEvent, QPoint
+    from PySide6.QtGui import QMouseEvent
+
+    for i in range(6):
+        b.add_list(f"Ещё {i}")
+    win.board_changed()
+    app.processEvents()
+    bv = page.board_view
+    bar = bv.horizontalScrollBar()
+    assert bar.maximum() > 0
+    bar.setValue(0)
+    lane = bv.lane
+    g0 = lane.mapToGlobal(QPoint(lane.width() - 20, lane.height() - 20))
+
+    def send(obj, kind, gpos, button, buttons):
+        local = obj.mapFromGlobal(gpos)
+        ev = QMouseEvent(kind, QPointF(local), QPointF(gpos), button, buttons, Qt.NoModifier)
+        app.sendEvent(obj, ev)
+
+    send(lane, QEvent.MouseButtonPress, g0, Qt.MiddleButton, Qt.MiddleButton)
+    send(lane, QEvent.MouseMove, g0 - QPoint(150, 0), Qt.NoButton, Qt.MiddleButton)
+    send(lane, QEvent.MouseButtonRelease, g0 - QPoint(150, 0), Qt.MiddleButton, Qt.NoButton)
+    assert bar.value() >= 140, bar.value()
+    send(lane, QEvent.MouseButtonPress, g0, Qt.LeftButton, Qt.LeftButton)
+    send(lane, QEvent.MouseMove, g0 + QPoint(100, 0), Qt.NoButton, Qt.LeftButton)
+    send(lane, QEvent.MouseButtonRelease, g0 + QPoint(100, 0), Qt.LeftButton, Qt.NoButton)
+    assert 30 <= bar.value() <= 60, bar.value()
+    send(lane, QEvent.MouseButtonPress, g0, Qt.MiddleButton, Qt.MiddleButton)
+    send(lane, QEvent.MouseButtonRelease, g0, Qt.MiddleButton, Qt.NoButton)
+    assert bv._auto is not None
+    send(lane, QEvent.MouseButtonPress, g0, Qt.LeftButton, Qt.LeftButton)
+    assert bv._auto is None
+    report["navigation"] = "ok"
     win.go_home()
     win.go_notes()
     win.go_settings()

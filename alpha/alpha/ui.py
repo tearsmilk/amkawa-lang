@@ -8,10 +8,10 @@ from PySide6.QtCore import QPoint, QRectF, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QKeySequence, QPainter, QPainterPath, QShortcut
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
-                               QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QScrollArea, QSpinBox,
+                               QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QScrollArea, QSlider, QSpinBox,
                                QStackedWidget, QSystemTrayIcon, QTabWidget, QToolButton, QVBoxLayout, QWidget)
 
-from . import APP_NAME, LOGO, __version__, icons, theme
+from . import APP_NAME, LOGO, __version__, backgrounds, icons, theme
 from .automation import Automation
 from .automation_ui import AutomationDialog
 from .board_view import BoardView
@@ -102,27 +102,90 @@ class BoardTile(QPushButton):
         p.end()
 
 
+class BackgroundPicker(QWidget):
+    """Scenes, the user's pictures (+ upload), gradients and colours; emits `picked(bg)`."""
+
+    picked = Signal(str)
+
+    def __init__(self, current="", cols=5, size=(72, 46), parent=None):
+        super().__init__(parent)
+        self.current = current
+        self.cols = cols
+        self.size_ = size
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(0, 0, 0, 0)
+        self.lay.setSpacing(6)
+        self.rebuild()
+
+    def rebuild(self):
+        clear_layout(self.lay)
+        w, h = self.size_
+        sections = [("КАРТИНКИ", [("scene:" + k, v) for k, v in backgrounds.SCENES.items()]),
+                    ("ВАШИ КАРТИНКИ", [(g, Path(g).name) for g in backgrounds.gallery()] + [("+upload", "Загрузить…")]),
+                    ("ГРАДИЕНТЫ", [(k, k) for k in theme.BACKGROUNDS]),
+                    ("ЦВЕТА", [(theme.label_hex(k), name) for k, (_, name) in theme.LABEL_COLORS.items()])]
+        for title, items in sections:
+            self.lay.addWidget(label(title, "Section"))
+            grid = QGridLayout()
+            grid.setSpacing(6)
+            for i, (bg, tip) in enumerate(items):
+                b = QToolButton()
+                b.setIconSize(QSize(w, h))
+                b.setToolTip(tip)
+                if bg == "+upload":
+                    b.setText("+  Загрузить картинку")
+                    b.setToolButtonStyle(Qt.ToolButtonTextOnly)
+                    b.setFixedSize(2 * w + 14, h + 8)
+                    b.setObjectName("UploadTile")
+                    b.clicked.connect(self.upload)
+                    grid.addWidget(b, i // self.cols, i % self.cols, 1, 2)
+                    continue
+                else:
+                    b.setIcon(backgrounds.swatch(bg, w, h, bg == self.current))
+                    b.clicked.connect(lambda _=False, v=bg: self.pick(v))
+                    if title == "ВАШИ КАРТИНКИ":
+                        b.setContextMenuPolicy(Qt.CustomContextMenu)
+                        b.customContextMenuRequested.connect(lambda pos, v=bg, b_=b: self._menu(v, b_.mapToGlobal(pos)))
+                grid.addWidget(b, i // self.cols, i % self.cols)
+            grid.setColumnStretch(self.cols, 1)
+            self.lay.addLayout(grid)
+
+    def pick(self, bg):
+        self.current = bg
+        self.rebuild()
+        self.picked.emit(bg)
+
+    def upload(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Картинка для фона", "",
+                                              "Картинки (*.png *.jpg *.jpeg *.webp *.bmp *.gif)")
+        if path:
+            self.pick(backgrounds.import_image(path))
+
+    def _menu(self, bg, pos):
+        m = QMenu(self)
+        m.addAction("Убрать из галереи", lambda: (backgrounds.remove_from_gallery(bg), self.rebuild()))
+        m.exec(pos)
+
+
 class CreateBoardDialog(QDialog):
     def __init__(self, parent=None, template=None):
         super().__init__(parent)
         self.setWindowTitle("Создать доску")
-        self.setFixedWidth(420)
+        self.setFixedWidth(470)
         lay = QVBoxLayout(self)
         lay.addWidget(label("Создать доску", "Title"))
         self.preview = QLabel()
         self.preview.setFixedHeight(120)
         lay.addWidget(self.preview)
-        lay.addWidget(label("Фон"))
-        grid = QGridLayout()
         self.bg = TEMPLATES[template]["bg"] if template else "terracotta"
-        self.bg_btns = {}
-        for i, key in enumerate(theme.BACKGROUNDS):
-            b = QToolButton()
-            b.setIconSize(QSize(64, 40))
-            b.clicked.connect(lambda _=False, k=key: self.pick(k))
-            grid.addWidget(b, i // 5, i % 5)
-            self.bg_btns[key] = b
-        lay.addLayout(grid)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFixedHeight(250)
+        self.picker = BackgroundPicker(self.bg, cols=5, size=(70, 44))
+        self.picker.picked.connect(self.pick)
+        scroll.setWidget(self.picker)
+        lay.addWidget(scroll)
         lay.addWidget(label("Название доски"))
         self.name = QLineEdit(template or "")
         self.name.setPlaceholderText("Например, «Учёба» или «Проект»")
@@ -141,18 +204,16 @@ class CreateBoardDialog(QDialog):
 
     def pick(self, key):
         self.bg = key
-        for k, b in self.bg_btns.items():
-            b.setIcon(color_swatch(k, 64, 40, k == key))
         from PySide6.QtGui import QPixmap
 
-        pix = QPixmap(760, 240)
+        pix = QPixmap(860, 240)
         p = QPainter(pix)
         paint_background(p, pix.rect(), key)
         p.setRenderHint(QPainter.Antialiasing)
         for i, h in enumerate((150, 100, 180)):
             path = QPainterPath()
             path.addRoundedRect(QRectF(40 + i * 230, 30, 200, h), 12, 12)
-            p.fillPath(path, QColor(255, 255, 255, 200))
+            p.fillPath(path, QColor(240, 238, 230, 225))
         p.end()
         pix.setDevicePixelRatio(2)
         self.preview.setPixmap(pix)
@@ -400,6 +461,7 @@ class BoardPage(QWidget):
         self.board_view.changed.connect(win.board_changed)
         self.board_view.open_card_requested.connect(win.open_card)
         self.board_view.card_menu_requested.connect(self.card_menu)
+        self.board_view.background_dropped.connect(self.set_background_file)
         self.table = TableView(board)
         self.table.open_card_requested.connect(win.open_card)
         self.calendar = CalendarView(board)
@@ -414,7 +476,7 @@ class BoardPage(QWidget):
 
     def paintEvent(self, _):
         p = QPainter(self)
-        paint_background(p, self.rect(), self.b.d.get("bg"))
+        paint_background(p, self.rect(), self.b.d.get("bg"), self.b.d["prefs"].get("bg_dim", 0))
         p.end()
 
     # -- bar
@@ -637,30 +699,43 @@ class BoardPage(QWidget):
     def change_bg(self):
         dlg = QDialog(self)
         dlg.setWindowTitle("Фон доски")
+        dlg.resize(470, 640)
         lay = QVBoxLayout(dlg)
         lay.addWidget(label("Фон доски", "H2"))
-        grid = QGridLayout()
-        for i, key in enumerate(list(theme.BACKGROUNDS) + list(theme.LABEL_COLORS)):
-            b = QToolButton()
-            b.setIconSize(QSize(72, 46))
-            color = key if key in theme.BACKGROUNDS else theme.label_hex(key)
-            b.setIcon(color_swatch(key, 72, 46, self.b.d.get("bg") == color))
-            b.clicked.connect(lambda _=False, c=color: (self.b.set_board(bg=c), self.win.board_changed(),
-                                                        dlg.accept()))
-            grid.addWidget(b, i // 5, i % 5)
-        lay.addLayout(grid)
-        img = QPushButton("Своя картинка…")
+        lay.addWidget(label("Свою картинку можно и просто перетащить из Finder на свободное место доски.", "Hint",
+                            wrap=True))
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        picker = BackgroundPicker(self.b.d.get("bg"))
+        picker.picked.connect(lambda bg: (self.b.set_board(bg=bg), self.win.board_changed()))
+        scroll.setWidget(picker)
+        lay.addWidget(scroll, 1)
+        row = QHBoxLayout()
+        row.addWidget(label("Затемнение"))
+        dim = QSlider(Qt.Horizontal)
+        dim.setRange(0, 60)
+        dim.setValue(int(self.b.d["prefs"].get("bg_dim", 0)))
 
-        def pick():
-            path, _ = QFileDialog.getOpenFileName(dlg, "Картинка для фона", "", "Картинки (*.png *.jpg *.jpeg *.webp)")
-            if path:
-                self.b.set_board(bg=path)
-                self.win.board_changed()
-                dlg.accept()
+        def set_dim(v):
+            self.b.d["prefs"]["bg_dim"] = v
+            self.b.dirty = True
+            self.update()
+            self.board_view.viewport().update()
+            self.win.save_timer.start(500)
 
-        img.clicked.connect(pick)
-        lay.addWidget(img)
+        dim.valueChanged.connect(set_dim)
+        row.addWidget(dim, 1)
+        lay.addLayout(row)
+        ok = QPushButton("Готово")
+        ok.setObjectName("Accent")
+        ok.clicked.connect(dlg.accept)
+        lay.addWidget(ok)
         dlg.exec()
+
+    def set_background_file(self, path):
+        self.b.set_board(bg=backgrounds.import_image(path))
+        self.win.board_changed()
 
     def manage_labels(self):
         dlg = QDialog(self)
@@ -980,7 +1055,11 @@ class SettingsPage(QScrollArea):
                      ("Q", "только мои карточки"), ("Enter", "открыть карточку под курсором"),
                      ("Пробел", "назначить себя на карточку под курсором"), ("L / D", "метки / даты карточки"),
                      ("1–9", "переключить метку по номеру"), ("C", "архивировать карточку под курсором"),
-                     ("⌘Z / ⇧⌘Z", "отменить / повторить"), ("Esc", "сбросить фильтр")):
+                     ("⌘Z / ⇧⌘Z", "отменить / повторить"), ("Esc", "сбросить фильтр"),
+                     ("⌘\\", "скрыть / показать боковую панель"),
+                     ("Колесико зажато", "тащить доску в любую сторону (по горизонтали — доска, по вертикали — список)"),
+                     ("Щелчок колесиком", "автопрокрутка: ведите мышь в нужную сторону, щелчок — стоп"),
+                     ("Тащить пустое место", "левой кнопкой по фону доски — прокрутка в стороны")):
             lay.addWidget(label(f"<b>{k}</b> — {t}"))
         lay.addStretch(1)
         lay.addWidget(label(f"{APP_NAME} {__version__}", "Hint"))
@@ -1014,6 +1093,13 @@ class MainWindow(QMainWindow):
         self.side_lay.setContentsMargins(12, 18, 12, 14)
         self.side_lay.setSpacing(3)
         h.addWidget(self.side)
+        self.rail = QFrame()
+        self.rail.setObjectName("Side")
+        self.rail.setFixedWidth(52)
+        self.rail_lay = QVBoxLayout(self.rail)
+        self.rail_lay.setContentsMargins(8, 16, 8, 12)
+        self.rail_lay.setSpacing(6)
+        h.addWidget(self.rail)
         self.stack = QStackedWidget()
         h.addWidget(self.stack, 1)
         self.setCentralWidget(root)
@@ -1038,7 +1124,7 @@ class MainWindow(QMainWindow):
             self.tray.activated.connect(lambda *_: (self.show(), self.raise_()))
             self.tray.show()
         for keys, fn in (("Ctrl+Z", self.undo), ("Ctrl+Shift+Z", self.redo), ("Ctrl+N", lambda: self.create_board()),
-                         ("Ctrl+1", self.go_home)):
+                         ("Ctrl+1", self.go_home), ("Ctrl+\\", self.toggle_sidebar)):
             s = QShortcut(QKeySequence(keys), self)
             s.activated.connect(fn)
         last = self.settings.get("last_board")
@@ -1067,12 +1153,68 @@ class MainWindow(QMainWindow):
             self.refresh_board(full=True)
 
     # -- sidebar
+    def toggle_sidebar(self):
+        self.settings["sidebar_hidden"] = not self.settings.get("sidebar_hidden")
+        self.settings.save()
+        self.build_side()
+
+    def _build_rail(self):
+        clear_layout(self.rail_lay)
+        logo = label(LOGO, "Gamma")
+        logo.setAlignment(Qt.AlignCenter)
+        self.rail_lay.addWidget(logo)
+        self.rail_lay.addSpacing(6)
+        n_notes = len(self.notes.items()) if hasattr(self, "notes") else 0
+        for icon, tip, fn in (("dots", "Показать боковую панель  ⌘\\", self.toggle_sidebar),
+                              ("board", "Доски", self.go_home),
+                              ("bell", "Уведомления" + (f" · {n_notes}" if n_notes else ""), self.go_notes),
+                              ("settings", "Настройки", self.go_settings),
+                              ("plus", "Создать доску", lambda: self.create_board())):
+            b = QToolButton()
+            if icon == "dots":
+                b.setText("»")
+                b.setObjectName("CollapseBtn")
+            else:
+                b.setIcon(ic(icon))
+            b.setIconSize(QSize(18, 18))
+            b.setToolTip(tip)
+            b.setFixedSize(36, 32)
+            b.clicked.connect(fn)
+            self.rail_lay.addWidget(b, 0, Qt.AlignHCenter)
+            if icon == "dots":
+                self.rail_lay.addSpacing(8)
+        self.rail_lay.addSpacing(8)
+        for b in [x for x in self.store.all() if x.d.get("starred")] + \
+                 [x for x in self.store.all() if not x.d.get("starred")][:8]:
+            t = QToolButton()
+            t.setIcon(QIcon(backgrounds.swatch(b.d.get("bg") or "terracotta", 26, 20,
+                                               self.current is not None and self.current.id == b.id)))
+            t.setIconSize(QSize(26, 20))
+            t.setToolTip(b.name)
+            t.clicked.connect(lambda _=False, i=b.id: self.open_board(i))
+            self.rail_lay.addWidget(t, 0, Qt.AlignHCenter)
+        self.rail_lay.addStretch(1)
+
     def build_side(self):
+        hidden = bool(self.settings.get("sidebar_hidden"))
+        self.side.setVisible(not hidden)
+        self.rail.setVisible(hidden)
+        if hidden:
+            self._build_rail()
+            if not hasattr(self, "nav"):
+                self.nav = {}
+            return
         clear_layout(self.side_lay)
         brand = QHBoxLayout()
         brand.addWidget(label(LOGO, "Gamma"))
         brand.addWidget(label(APP_NAME, "Logo"))
         brand.addStretch(1)
+        hide = QToolButton()
+        hide.setText("«")
+        hide.setObjectName("CollapseBtn")
+        hide.setToolTip("Скрыть боковую панель  ⌘\\")
+        hide.clicked.connect(self.toggle_sidebar)
+        brand.addWidget(hide)
         self.side_lay.addLayout(brand)
         self.side_lay.addSpacing(12)
         self.nav = {}
@@ -1097,8 +1239,7 @@ class MainWindow(QMainWindow):
             self.side_lay.addWidget(label(title, "Section"))
             for b in boards[:12]:
                 btn = QPushButton(b.name)
-                btn.setIcon(QIcon(color_swatch(b.d.get("bg") if b.d.get("bg") in theme.BACKGROUNDS else "terracotta",
-                                               22, 16)))
+                btn.setIcon(QIcon(backgrounds.swatch(b.d.get("bg") or "terracotta", 22, 16)))
                 btn.setIconSize(QSize(22, 16))
                 btn.setCheckable(True)
                 btn.setChecked(self.current is not None and self.current.id == b.id and self.stack.currentWidget() is
@@ -1112,7 +1253,7 @@ class MainWindow(QMainWindow):
         self.side_lay.addStretch(1)
 
     def _check_nav(self, key):
-        for k, b in self.nav.items():
+        for k, b in getattr(self, "nav", {}).items():
             b.setChecked(k == key)
 
     def go_home(self):
@@ -1278,7 +1419,7 @@ class MainWindow(QMainWindow):
         if changed and self.current is not None:
             self.refresh_board()
         self.store.save()
-        if hasattr(self, "nav"):
+        if "notes" in getattr(self, "nav", {}) and not self.settings.get("sidebar_hidden"):
             n = len(self.notes.items())
             self.nav["notes"].setText("Уведомления" + (f"  ·  {n}" if n else ""))
 

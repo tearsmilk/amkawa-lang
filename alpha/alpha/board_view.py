@@ -1,11 +1,11 @@
 """The kanban board: horizontally scrolling lists, each with its own vertical scroll; cards painted by `CardFace`.
 Drag and drop: cards between / within lists (placeholder shows where it lands), lists by their header.
 Inline composers for new cards and lists, list menus (copy, move all, sort, archive, WIP limit, colour)."""
-from PySide6.QtCore import QMimeData, QPoint, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QMimeData, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QDrag, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu, QPlainTextEdit,
-                               QPushButton, QScrollArea, QSizePolicy, QSpinBox, QToolButton, QVBoxLayout, QWidget,
-                               QWidgetAction)
+from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu,
+                               QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QToolButton,
+                               QVBoxLayout, QWidget, QWidgetAction)
 
 from . import icons, theme
 from .widgets import CardFace, paint_background
@@ -329,6 +329,7 @@ class ListColumn(QFrame):
                 return True
             if t == e.Type.MouseButtonPress and e.button() == Qt.LeftButton:
                 self._press = e.globalPosition().toPoint()
+                return True
             elif t == e.Type.MouseMove and self._press is not None and e.buttons() & Qt.LeftButton:
                 if (e.globalPosition().toPoint() - self._press).manhattanLength() > 8:
                     self._press = None
@@ -384,15 +385,15 @@ class ListColumn(QFrame):
         return self.stack.mapFrom(self, pos).y()
 
     def dragEnterEvent(self, e):
-        if e.mimeData().hasFormat(CARD_MIME):
-            e.acceptProposedAction()
-        elif e.mimeData().hasFormat(LIST_MIME):
+        if e.mimeData().hasFormat(CARD_MIME) or e.mimeData().hasFormat(LIST_MIME) or image_from_mime(e.mimeData()):
             e.acceptProposedAction()
 
     def dragMoveEvent(self, e):
         md = e.mimeData()
         pos = e.position().toPoint()
-        if md.hasFormat(CARD_MIME):
+        if image_from_mime(md):
+            e.acceptProposedAction()
+        elif md.hasFormat(CARD_MIME):
             cid = bytes(md.data(CARD_MIME)).decode()
             card = self.view.board.card(cid)
             h = CardFace(self.view.board, card, CARD_W).h if card else 40
@@ -418,7 +419,10 @@ class ListColumn(QFrame):
 
     def dropEvent(self, e):
         md = e.mimeData()
-        if md.hasFormat(CARD_MIME):
+        if image_from_mime(md):
+            e.acceptProposedAction()
+            self.view.background_dropped.emit(image_from_mime(md))
+        elif md.hasFormat(CARD_MIME):
             cid = bytes(md.data(CARD_MIME)).decode()
             idx = self.stack.index_at(self._stack_y(e.position().toPoint()))
             eligible = self.stack._eligible()
@@ -484,6 +488,20 @@ class ListColumn(QFrame):
         if ok:
             self.view.board.copy_list(self.lst["id"], name.strip() or self.lst["name"])
             self.view.changed.emit()
+
+
+def image_from_mime(md):
+    """Local picture file dragged from Finder, or None."""
+    if not md.hasUrls():
+        return None
+    from pathlib import Path
+
+    from .backgrounds import IMAGE_EXT
+
+    for url in md.urls():
+        if url.isLocalFile() and Path(url.toLocalFile()).suffix.lower() in IMAGE_EXT:
+            return url.toLocalFile()
+    return None
 
 
 def _safe(fn):
@@ -577,7 +595,7 @@ class Lane(QWidget):
         return idx
 
     def dragEnterEvent(self, e):
-        if e.mimeData().hasFormat(LIST_MIME) or e.mimeData().hasFormat(CARD_MIME):
+        if e.mimeData().hasFormat(LIST_MIME) or e.mimeData().hasFormat(CARD_MIME) or image_from_mime(e.mimeData()):
             e.acceptProposedAction()
 
     def dragMoveEvent_at(self, pos):
@@ -593,7 +611,9 @@ class Lane(QWidget):
         self.update()
 
     def dragMoveEvent(self, e):
-        if e.mimeData().hasFormat(LIST_MIME):
+        if image_from_mime(e.mimeData()):
+            e.acceptProposedAction()
+        elif e.mimeData().hasFormat(LIST_MIME):
             self.dragMoveEvent_at(e.position().toPoint())
             e.acceptProposedAction()
         elif e.mimeData().hasFormat(CARD_MIME):
@@ -615,7 +635,10 @@ class Lane(QWidget):
             QTimer.singleShot(0, self.view.changed.emit)
 
     def dropEvent(self, e):
-        if e.mimeData().hasFormat(LIST_MIME):
+        if image_from_mime(e.mimeData()):
+            e.acceptProposedAction()
+            self.view.background_dropped.emit(image_from_mime(e.mimeData()))
+        elif e.mimeData().hasFormat(LIST_MIME):
             e.acceptProposedAction()
             self.drop_list_at(e.position().toPoint())
         elif e.mimeData().hasFormat(CARD_MIME):
@@ -637,12 +660,38 @@ class Lane(QWidget):
         p.end()
 
 
+class AnchorMark(QWidget):
+    """The ✥ mark shown where the wheel was clicked (autoscroll origin)."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setFixedSize(32, 32)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setBrush(QColor(255, 255, 255, 220))
+        p.setPen(QPen(QColor("#141413"), 1.4))
+        p.drawEllipse(2, 2, 28, 28)
+        p.setBrush(QColor("#141413"))
+        p.setPen(Qt.NoPen)
+        for a, b, c in (((16, 6), (12, 11), (20, 11)), ((16, 26), (12, 21), (20, 21)),
+                        ((6, 16), (11, 12), (11, 20)), ((26, 16), (21, 12), (21, 20))):
+            from PySide6.QtGui import QPolygon
+
+            p.drawPolygon(QPolygon([QPoint(*a), QPoint(*b), QPoint(*c)]))
+        p.drawEllipse(14, 14, 4, 4)
+        p.end()
+
+
 class BoardView(QScrollArea):
     """Shows one board. Emits `changed` after any edit (the window saves, refreshes the other views)."""
 
     changed = Signal()
     open_card_requested = Signal(str)
     card_menu_requested = Signal(str, QPoint)
+    background_dropped = Signal(str)
 
     def __init__(self, board, settings=None):
         super().__init__()
@@ -660,14 +709,119 @@ class BoardView(QScrollArea):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setObjectName("BoardScroll")
         self.viewport().setAutoFillBackground(False)
+        self._pan = None          # {"last": QPoint, "start": QPoint, "col": ListColumn | None, "button"}
+        self._auto = None         # autoscroll anchor (global QPoint) after a wheel click
+        self._auto_col = None
+        self._auto_timer = QTimer(self)
+        self._auto_timer.timeout.connect(self._autoscroll_step)
+        self._anchor = AnchorMark(self.viewport())
+        self._anchor.hide()
+        QApplication.instance().installEventFilter(self)
         self.rebuild()
+
+    # -- navigation with the mouse wheel: press-and-drag pans, a click starts autoscroll; left-drag on empty board
+    def _column_at(self, gpos):
+        w = QApplication.widgetAt(gpos)
+        while w is not None and not isinstance(w, ListColumn):
+            if w is self:
+                return None
+            w = w.parentWidget()
+        return w
+
+    def eventFilter(self, obj, e):
+        t = e.type()
+        if t not in (QEvent.MouseButtonPress, QEvent.MouseMove, QEvent.MouseButtonRelease, QEvent.KeyPress,
+                     QEvent.Wheel):
+            return False
+        try:
+            if not self.isVisible():
+                return False
+        except RuntimeError:
+            return False
+        if self._auto is not None:
+            if t in (QEvent.MouseButtonPress, QEvent.Wheel) or (t == QEvent.KeyPress and e.key() == Qt.Key_Escape):
+                self.stop_autoscroll()
+                return t != QEvent.Wheel
+            return False
+        if t == QEvent.MouseButtonPress and isinstance(obj, QWidget) and (obj is self or self.isAncestorOf(obj)):
+            if obj.window() is not self.window():
+                return False
+            middle = e.button() == Qt.MiddleButton
+            empty = e.button() == Qt.LeftButton and obj in (self.viewport(), self.lane)
+            if middle or empty:
+                g = e.globalPosition().toPoint()
+                self._pan = {"last": g, "start": g, "col": self._column_at(g), "button": e.button()}
+                QApplication.setOverrideCursor(Qt.ClosedHandCursor)
+                return True
+        elif t == QEvent.MouseMove and self._pan is not None:
+            g = e.globalPosition().toPoint()
+            d = g - self._pan["last"]
+            self._pan["last"] = g
+            self.scroll_by(-d.x(), -d.y(), self._pan["col"])
+            return True
+        elif t == QEvent.MouseButtonRelease and self._pan is not None and e.button() == self._pan["button"]:
+            pan, self._pan = self._pan, None
+            QApplication.restoreOverrideCursor()
+            if pan["button"] == Qt.MiddleButton and (pan["last"] - pan["start"]).manhattanLength() < 4:
+                self.start_autoscroll(pan["start"], pan["col"])
+            return True
+        return False
+
+    def scroll_by(self, dx, dy, col=None):
+        bar = self.horizontalScrollBar()
+        bar.setValue(int(bar.value() + dx))
+        if col is not None and dy:
+            try:
+                vb = col.scroll.verticalScrollBar()
+                vb.setValue(int(vb.value() + dy))
+            except RuntimeError:
+                pass
+
+    def start_autoscroll(self, gpos, col):
+        self._auto = gpos
+        self._auto_col = col
+        self._anchor.move(self.viewport().mapFromGlobal(gpos) - QPoint(16, 16))
+        self._anchor.show()
+        self._anchor.raise_()
+        QApplication.setOverrideCursor(Qt.SizeAllCursor)
+        self._auto_timer.start(16)
+
+    def stop_autoscroll(self):
+        if self._auto is None:
+            return
+        self._auto = None
+        self._auto_timer.stop()
+        self._anchor.hide()
+        QApplication.restoreOverrideCursor()
+
+    def _autoscroll_step(self):
+        from PySide6.QtGui import QCursor
+
+        if self._auto is None:
+            return
+        d = QCursor.pos() - self._auto
+
+        def speed(v):
+            dead = 14
+            if abs(v) <= dead:
+                return 0
+            return (1 if v > 0 else -1) * ((abs(v) - dead) / 7.0) ** 1.35
+
+        self.scroll_by(speed(d.x()), speed(d.y()), self._auto_col)
+
+    def hideEvent(self, e):
+        self.stop_autoscroll()
+        if self._pan is not None:
+            self._pan = None
+            QApplication.restoreOverrideCursor()
+        super().hideEvent(e)
 
     def visible(self, card):
         return self.board.matches(card, self.filter)
 
     def paintEvent(self, e):
         p = QPainter(self.viewport())
-        paint_background(p, self.viewport().rect(), self.board.d.get("bg"))
+        paint_background(p, self.viewport().rect(), self.board.d.get("bg"), self.board.d["prefs"].get("bg_dim", 0))
         p.end()
 
     def rebuild(self):
@@ -699,6 +853,7 @@ class BoardView(QScrollArea):
         if self.reopen_list_composer:
             self.reopen_list_composer = False
             QTimer.singleShot(0, lambda: _safe(self.add_list.open))
+        self._fit_heights()
         QTimer.singleShot(0, self._fit_heights)
 
     def resizeEvent(self, e):

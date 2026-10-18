@@ -1,4 +1,4 @@
-"""Render assets/icon.png (1024x1024): terracotta squircle with a serif italic Greek alpha (α) over three kanban columns."""
+"""Render assets/icon.png (1024x1024): terracotta squircle with a serif italic Greek alpha (α)."""
 import sys
 from pathlib import Path
 
@@ -17,11 +17,7 @@ rect = QRectF(margin, margin, size - 2 * margin, size - 2 * margin)
 bg = QPainterPath()
 bg.addRoundedRect(rect, 185, 185)
 p.fillPath(bg, QColor("#D97757"))
-# three faint kanban columns behind the letter
-for i, h in enumerate((470, 340, 560)):
-    col = QPainterPath()
-    col.addRoundedRect(QRectF(margin + 70 + i * 225, margin + 90, 175, h), 36, 36)
-    p.fillPath(col, QColor(255, 255, 255, 46))
+
 
 families = set(QFontDatabase.families())
 family = next((f for f in ("FreeSerif", "Georgia", "Times New Roman", "DejaVu Serif", "Liberation Serif", "Noto Serif")
@@ -32,7 +28,7 @@ font.setPixelSize(720)
 glyph = QPainterPath()
 glyph.addText(0, 0, font, "α")
 box = glyph.boundingRect()
-k = 470 / box.height()  # fill the squircle like the other apps' letters
+k = 560 / box.height()  # fill the squircle like the other apps' letters
 glyph = QTransform.fromScale(k, k).map(glyph)
 box = glyph.boundingRect()
 # centre the glyph optically inside the squircle

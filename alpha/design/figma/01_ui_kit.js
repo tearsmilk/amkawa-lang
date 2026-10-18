@@ -195,5 +195,25 @@ const chips = ["later", "soon", "overdue", "done"].map(v => {
 });
 variants(chips, grid).name = "Due chip";
 
+// Background picker (scenes, own pictures + upload, gradients, colours) and the collapsed side rail
+const bgp = comp("Background picker", "VERTICAL", {pad: 12, gap: 6, radius: 12, fill: "card", stroke: "border"});
+bgp.counterAxisAlignItems = "MIN";
+for (const [title, fills] of [["КАРТИНКИ", [["#F3D2B3", "#4A2C33"], ["#9FC3DA", "#33506E"], ["#F6E3C6", "#94593A"], ["#141B33", "#3B4A6B"], ["#CFE0C8", "#2F4F38"]]],
+                              ["ГРАДИЕНТЫ", [["#D97757", "#C6613F"], ["#3B6A8F", "#5B8CC4"], ["#4E7A50", "#7BA05B"], ["#3B4A6B", "#D97757"], ["#6B4A7A", "#9B7BC4"]]]]) {
+  bgp.appendChild(txt(title, {size: 10, style: "Semi Bold", color: "muted"}));
+  const row = al("HORIZONTAL", {name: title, gap: 6});
+  for (const [a, b] of fills) { const r = figma.createRectangle(); r.resize(72, 46); r.cornerRadius = 8; r.fills = [{type: "GRADIENT_LINEAR", gradientTransform: [[0, 1, 0], [-1, 0, 1]], gradientStops: [{position: 0, color: {...hex(a), a: 1}}, {position: 1, color: {...hex(b), a: 1}}]}]; row.appendChild(r); }
+  bgp.appendChild(row);
+}
+bgp.appendChild(txt("ВАШИ КАРТИНКИ", {size: 10, style: "Semi Bold", color: "muted"}));
+const up = al("HORIZONTAL", {name: "Upload", pad: [14, 20, 14, 20], radius: 8, fill: "panel", stroke: "faint"}); up.dashPattern = [3, 3]; up.appendChild(txt("+  Загрузить картинку", {color: "muted"})); bgp.appendChild(up);
+const dimRow = al("HORIZONTAL", {name: "Dim", gap: 8, align: "CENTER"}); dimRow.appendChild(txt("Затемнение")); const tr = figma.createRectangle(); tr.resize(220, 4); tr.cornerRadius = 2; tr.fills = [fill("accent")]; dimRow.appendChild(tr); bgp.appendChild(dimRow);
+grid.appendChild(bgp);
+const rail = comp("Side rail (collapsed)", "VERTICAL", {pad: [16, 8, 12, 8], gap: 10, fill: "sidebar", align: "CENTER"});
+rail.resize(52, 360); rail.primaryAxisSizingMode = "FIXED";
+for (const t of ["α", "»", "▦", "🔔", "⚙", "+"]) rail.appendChild(txt(t, {family: t === "α" ? SERIF : SANS, style: t === "α" ? SERIF_I : "Regular", size: t === "α" ? 26 : 15, color: t === "α" ? "accent" : "text"}));
+for (const c of ["board-a", "l-green", "l-blue"]) { const r = figma.createRectangle(); r.resize(26, 20); r.cornerRadius = 5; r.fills = [fill(c)]; rail.appendChild(r); }
+grid.appendChild(rail);
+
 await root.screenshot({scale: 0.5});
 return {rootId: root.id, colIds, variables: Object.keys(T).length * 2};
