@@ -11,15 +11,17 @@
   screen recorder + screenshots: region / full screen, sound, global hotkeys, replay buffer «откат»; bundles the static
   ffmpeg from `imageio-ffmpeg`), `alpha/` — Альфа / Alpha (α, local Trello-like kanban: boards, lists, cards with
   labels / members / dates / checklists / attachments / covers / custom fields, drag and drop, table / calendar /
-  dashboard views, Butler-like automation, Trello JSON import). All target macOS 11+ Intel x64 and are built into `.dmg` by `.github/workflows/*-macos.yml` (self-test included).
+  dashboard views, Butler-like automation, Trello JSON import), `eta/` — Эта / Eta (η, Minecraft launcher; stage 1 = the
+  working interface: loading page, home, Modrinth-like modpack catalog on a demo provider + own instances, offline
+  accounts, settings; Modrinth / CurseForge downloads and launching come next). All target macOS 11+ Intel x64 and are built into `.dmg` by `.github/workflows/*-macos.yml` (self-test included).
 - **Epsilon design lives in Figma** (file `P9vRt9ShTejyOkC7fYqWU4`, team Lotus): the UI kit and *every* screen.
   When you add or change a screen, dialog or component in Epsilon, update `epsilon/design/figma/01_ui_kit.js` /
   `02_screens.js` in the same change and run them via the Figma MCP `use_figma` tool (Starter plan has a small
   monthly MCP call limit — if it is hit, schedule a retry and tell the user).
-- **Ню, Дзета, Дельта, Лямбда, Мю, Гамма and Альфа designs** follow the same rule: `nu/design/figma/*.js` → Figma file «Ню — UI»,
+- **Ню, Дзета, Дельта, Лямбда, Мю, Гамма, Альфа and Эта designs** follow the same rule: `nu/design/figma/*.js` → Figma file «Ню — UI»,
   `zeta/design/figma/*.js` → «Дзета — UI», `delta/design/figma/*.js` → «Дельта — UI», `lambda/design/figma/*.js` →
-  «Лямбда — UI», `mu/design/figma/*.js` → «Мю — UI», `gamma/design/figma/*.js` → «Гамма — UI», `alpha/design/figma/*.js` → «Альфа — UI»
-  (team Lotus, create them on the first run).
+  «Лямбда — UI», `mu/design/figma/*.js` → «Мю — UI», `gamma/design/figma/*.js` → «Гамма — UI», `alpha/design/figma/*.js` → «Альфа — UI»,
+  `eta/design/figma/*.js` → «Эта — UI» (team Lotus, create them on the first run).
 - Мю's `.moc3` writer can be checked against the official Cubism Core (download `live2dcubismcore.min.js`, run it in
   Node and compare drawable vertex positions with `Model.evaluate`); the Core is proprietary — never commit it.
 - UI language is Russian; style is Claude-like (ivory/charcoal, terracotta #D97757 accent, serif headings, minimal animation).
