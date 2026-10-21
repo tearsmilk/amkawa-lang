@@ -11,9 +11,10 @@
   screen recorder + screenshots: region / full screen, sound, global hotkeys, replay buffer «откат»; bundles the static
   ffmpeg from `imageio-ffmpeg`), `alpha/` — Альфа / Alpha (α, local Trello-like kanban: boards, lists, cards with
   labels / members / dates / checklists / attachments / covers / custom fields, drag and drop, table / calendar /
-  dashboard views, Butler-like automation, Trello JSON import), `eta/` — Эта / Eta (η, Minecraft launcher; stage 1 = the
-  working interface: loading page, home, Modrinth-like modpack catalog on a demo provider + own instances, offline
-  accounts, settings; Modrinth / CurseForge downloads and launching come next). All target macOS 11+ Intel x64 and are built into `.dmg` by `.github/workflows/*-macos.yml` (self-test included).
+  dashboard views, Butler-like automation, Trello JSON import), `eta/` — Эта / Eta (η, Minecraft launcher: loading page, home with a
+  compact instance card, live Modrinth catalog + `.mrpack` install (sha1-checked mod downloads; CurseForge still a demo
+  provider), own instances, offline accounts, settings with «Оформление» — accent, window background, glass, side bar
+  left / right / folded; downloading Minecraft + Java and launching come next). All target macOS 11+ Intel x64 and are built into `.dmg` by `.github/workflows/*-macos.yml` (self-test included).
 - **Epsilon design lives in Figma** (file `P9vRt9ShTejyOkC7fYqWU4`, team Lotus): the UI kit and *every* screen.
   When you add or change a screen, dialog or component in Epsilon, update `epsilon/design/figma/01_ui_kit.js` /
   `02_screens.js` in the same change and run them via the Figma MCP `use_figma` tool (Starter plan has a small
