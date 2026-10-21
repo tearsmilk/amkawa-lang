@@ -756,7 +756,13 @@ class CardDialog(QDialog):
                                         lambda: (self.b.update_card(self.cid, closed=True), self.emit_changed())))
         side.addStretch(1)
         self.scroll.setWidget(body)
-        QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(v))
+        QTimer.singleShot(0, lambda: self._restore_scroll(v))
+
+    def _restore_scroll(self, v):
+        try:
+            self.scroll.verticalScrollBar().setValue(v)
+        except (RuntimeError, AttributeError):   # the dialog was closed / rebuilt before the timer fired
+            pass
 
     def _popup(self, factory, anchor):
         p = factory()
