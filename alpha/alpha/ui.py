@@ -20,7 +20,7 @@ from .exchange import TEMPLATES, export_csv, export_json, export_markdown, from_
 from .model import Store, due_state, fmt_dt, parse_dt
 from .paths import Settings, resource_path
 from .views import CalendarView, DashboardView, TableView
-from .widgets import avatar_pixmap, bg_is_light, color_swatch, font, paint_background
+from .widgets import avatar_pixmap, bg_is_light, color_swatch, defer, font, paint_background
 
 IS_MAC = sys.platform == "darwin"
 
@@ -1132,7 +1132,7 @@ class MainWindow(QMainWindow):
             self.open_board(last)
         else:
             self.go_home()
-        QTimer.singleShot(1500, self.tick)
+        defer(self.tick, 1500)
 
     # -- theme
     def apply_theme(self, rebuild=True):

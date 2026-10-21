@@ -2,7 +2,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QDialog, QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
@@ -10,6 +10,17 @@ from . import icons, theme
 from .model import due_state, fmt_dt
 
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+
+def defer(fn, ms=0):
+    """QTimer.singleShot that tolerates the widget being gone when it fires (a rebuilt board, a closed dialog).
+    An exception raised inside a timer slot is left set by PySide 6.7 and the next Qt call dies with SystemError."""
+    def run():
+        try:
+            fn()
+        except (RuntimeError, AttributeError):
+            pass
+    QTimer.singleShot(ms, run)
 
 
 def font(px, bold=False, serif=False, italic=False):

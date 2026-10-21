@@ -4,7 +4,7 @@ Popups: labels, members, dates, move, copy, cover, checklist, fields."""
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QDateTime, QSize, Qt, QTime, QTimer, Signal
+from PySide6.QtCore import QDate, QDateTime, QSize, Qt, QTime, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (QApplication, QCalendarWidget, QCheckBox, QComboBox, QDateTimeEdit, QDialog,
                                QFileDialog, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QApplication, QCalendarWidget, QCheckBox, QComboB
 from . import icons, theme
 from .board_view import Composer
 from .model import FIELD_TYPES, due_state, fmt_dt, parse_dt
-from .widgets import IMAGE_EXT, Popup, avatar_pixmap, color_swatch, label_text_color
+from .widgets import IMAGE_EXT, Popup, avatar_pixmap, color_swatch, defer, label_text_color
 
 
 def _lbl(text, name=None, wrap=False):
@@ -105,7 +105,7 @@ class LabelsPopup(Popup):
         self.b.toggle_label(self.cid, label_id)
         if self.on_change:
             self.on_change()
-        QTimer.singleShot(0, self.fill)
+        defer(self.fill)
 
     def edit_label(self, lb):
         dlg = LabelEditor(self.b, lb, self)
@@ -197,7 +197,7 @@ class MembersPopup(Popup):
         self.b.toggle_member(self.cid, mid)
         if self.on_change:
             self.on_change()
-        QTimer.singleShot(0, self.fill)
+        defer(self.fill)
 
     def add(self):
         name, ok = QInputDialog.getText(self, "Участник", "Имя участника:")
@@ -494,7 +494,7 @@ class CardDialog(QDialog):
 
     def emit_changed(self):
         self.changed.emit()
-        QTimer.singleShot(0, self.reload)
+        defer(self.reload)
 
     def reload(self):
         card = self.card
@@ -654,7 +654,7 @@ class CardDialog(QDialog):
                 row.addWidget(cancel)
                 row.addStretch(1)
                 main.addLayout(row)
-                QTimer.singleShot(0, ed.setFocus)
+                defer(ed.setFocus)
             else:
                 ph = QPushButton("Добавить более подробное описание…")
                 ph.setObjectName("DescPlaceholder")
@@ -756,7 +756,7 @@ class CardDialog(QDialog):
                                         lambda: (self.b.update_card(self.cid, closed=True), self.emit_changed())))
         side.addStretch(1)
         self.scroll.setWidget(body)
-        QTimer.singleShot(0, lambda: self._restore_scroll(v))
+        defer(lambda: self._restore_scroll(v))
 
     def _restore_scroll(self, v):
         try:

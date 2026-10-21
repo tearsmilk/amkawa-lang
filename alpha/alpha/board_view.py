@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QInputDialog, 
                                QVBoxLayout, QWidget, QWidgetAction)
 
 from . import icons, theme
-from .widgets import CardFace, paint_background
+from .widgets import CardFace, defer, paint_background
 
 CARD_MIME = "application/x-alpha-card"
 LIST_MIME = "application/x-alpha-list"
@@ -82,7 +82,7 @@ class CardWidget(QWidget):
         if col is not None:   # the card leaves a gap where it was, like Trello
             col.stack.show_placeholder(col.stack.index_at(self.y() + self.height() / 2 - 1), self.height())
         cid = self.card["id"]
-        QTimer.singleShot(0, lambda: self.hide() if self.view.dragging == cid else None)
+        defer(lambda: self.hide() if self.view.dragging == cid else None)
         drag.exec(Qt.MoveAction)
         self.view.dragging = None
         try:
@@ -345,7 +345,7 @@ class ListColumn(QFrame):
         self.title.show()
         if name and name != self.lst["name"]:
             self.view.board.rename_list(self.lst["id"], name)
-            QTimer.singleShot(0, self.view.changed.emit)
+            defer(self.view.changed.emit)
 
     def drag_list(self):
         drag = QDrag(self)
@@ -367,7 +367,7 @@ class ListColumn(QFrame):
         self.add_btn.hide()
         self.composer.show()
         self.composer.edit.setFocus()
-        QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(
+        defer(lambda: self.scroll.verticalScrollBar().setValue(
             self.scroll.verticalScrollBar().maximum()))
 
     def close_composer(self):
@@ -508,7 +508,7 @@ def _safe(fn):
     """Deferred UI tweaks may outlive the widgets of a board that was rebuilt again meanwhile."""
     try:
         fn()
-    except RuntimeError:
+    except (RuntimeError, AttributeError):
         pass
 
 
@@ -632,7 +632,7 @@ class Lane(QWidget):
         self.hide_marker()
         if lid:
             self.view.board.move_list(lid, self.list_index_at(pos.x()))
-            QTimer.singleShot(0, self.view.changed.emit)
+            defer(self.view.changed.emit)
 
     def dropEvent(self, e):
         if image_from_mime(e.mimeData()):
@@ -838,23 +838,23 @@ class BoardView(QScrollArea):
             col = ListColumn(self, lst)
             self.lane.lay.addWidget(col, 0, Qt.AlignTop)
             if lst["id"] in vs:
-                QTimer.singleShot(0, lambda c=col, v=vs[lst["id"]]: _safe(lambda: c.scroll.verticalScrollBar().setValue(v)))
+                defer(lambda c=col, v=vs[lst["id"]]: _safe(lambda: c.scroll.verticalScrollBar().setValue(v)))
         self.add_list = AddListColumn(self)
         self.lane.lay.addWidget(self.add_list, 0, Qt.AlignTop)
         self.lane.lay.addStretch(1)
         self.setWidget(self.lane)
         self.lane.setStyleSheet("#Lane { background: transparent; }")
-        QTimer.singleShot(0, lambda: _safe(lambda: self.horizontalScrollBar().setValue(h)))
+        defer(lambda: _safe(lambda: self.horizontalScrollBar().setValue(h)))
         if self.reopen_composer:
             lid, self.reopen_composer = self.reopen_composer, None
             col = self.column(lid)
             if col:
-                QTimer.singleShot(0, lambda: _safe(col.open_composer))
+                defer(lambda: _safe(col.open_composer))
         if self.reopen_list_composer:
             self.reopen_list_composer = False
-            QTimer.singleShot(0, lambda: _safe(self.add_list.open))
+            defer(lambda: _safe(self.add_list.open))
         self._fit_heights()
-        QTimer.singleShot(0, self._fit_heights)
+        defer(self._fit_heights)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -903,7 +903,7 @@ class BoardView(QScrollArea):
             if (idx is None and cur and cur[-1] == cid) or (idx is not None and cur.index(cid) == idx):
                 return  # dropped where it was
         self.board.move_card(cid, lid, idx)
-        QTimer.singleShot(0, self.changed.emit)
+        defer(self.changed.emit)
 
     def autoscroll(self, pos):
         bar = self.horizontalScrollBar()
@@ -913,7 +913,7 @@ class BoardView(QScrollArea):
             bar.setValue(bar.value() + 18)
 
     def changed_later(self):
-        QTimer.singleShot(400, self.changed.emit)
+        defer(self.changed.emit, 400)
 
     def open_card(self, cid):
         self.open_card_requested.emit(cid)
