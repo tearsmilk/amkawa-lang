@@ -115,14 +115,15 @@ for (const mode of ["Light", "Dark"]) {
   const b = body(w);
   const side = panel("Home side", 230, {r: 1}); add(b, side, {v: "FILL"});
   const logo = al("HORIZONTAL", {name: "Logo", gap: 8, align: "CENTER"}); logo.appendChild(txt("μ", {family: SERIF, style: SERIF_I, size: 26, color: "accent"})); logo.appendChild(txt("Мю", {family: SERIF, size: 28})); side.appendChild(logo);
-  for (const t of ["▣  Модель из PSD", "✂  Модель из картинки", "▭  Открыть проект", "⇪  Импорт Inochi2D"]) side.appendChild(txt(t));
+  for (const t of ["▣  Модель из PSD", "✂  Модель из картинки", "▭  Открыть проект", "⇪  Импорт Inochi2D", "☺  Пример: Школьница"]) side.appendChild(txt(t));
   spacer(side); side.appendChild(txt("▯  Гайдбук"));
   const main = al("VERTICAL", {name: "Main", gap: 14, pad: [40, 48, 40, 48]}); add(b, main, {h: "FILL", v: "FILL"});
   main.appendChild(txt("Что оживим сегодня?", {family: SERIF, size: 28}));
   main.appendChild(txt("Возьмите 2D-иллюстрацию — PSD со слоями или одну картинку — и превратите её в модель для витубинга.", {color: "muted"}));
   const g = al("HORIZONTAL", {name: "Cards", gap: 14}); g.layoutWrap = "WRAP"; g.counterAxisSpacing = 14; add(main, g, {h: "FILL"});
   for (const [ic, t, d] of [["▣", "Модель из PSD", "Слои PSD становятся частями модели"], ["✂", "Модель из картинки", "Нарежьте одну иллюстрацию на части"],
-                            ["▭", "Открыть проект", "Файл .mu со всем ригом, позами и сценами"], ["⇪", "Импорт Inochi2D", "Готовая модель .inp"]]) {
+                            ["▭", "Открыть проект", "Файл .mu со всем ригом, позами и сценами"], ["⇪", "Импорт Inochi2D", "Готовая модель .inp"],
+                            ["☺", "Пример: Школьница", "Готовая модель из одной картинки — нарезка, риг, позы"]]) {
     const c = al("VERTICAL", {name: "Card", gap: 6, pad: [14, 16, 14, 16], radius: 14, fill: "card", stroke: "border"}); c.resize(540, 110); c.primaryAxisSizingMode = "AUTO"; c.counterAxisSizingMode = "FIXED";
     c.appendChild(txt(ic, {size: 24, color: "accent"})); c.appendChild(txt(t, {family: SERIF, size: 17})); c.appendChild(txt(d, {color: "muted"})); g.appendChild(c);
   }
@@ -203,6 +204,10 @@ MODE = "Light";
   add(r, btn("Запустить эфир", true), {h: "FILL"}); r.appendChild(section("Движение"));
   for (const t of ["☑ Следить за мышью", "☑ Моргать", "☑ Дышать", "☑ Лёгкое покачивание", "☑ Физика волос и одежды"]) r.appendChild(txt(t));
   r.appendChild(section("Микрофон → рот")); r.appendChild(txt("☐ Липсинк с микрофона")); r.appendChild(txt("Системный по умолчанию", {color: "muted"}));
+  r.appendChild(section("Камера → лицо")); r.appendChild(txt("☑ Отслеживать лицо по камере")); r.appendChild(txt("FaceTime HD Camera", {color: "muted"}));
+  canvas(r, {w: 266, h: 150, paper: "photo", fill: "muted"}); r.appendChild(txt("Лицо найдено · 24 к/с", {color: "muted"}));
+  r.appendChild(txt("☑ Зеркально (как в зеркале)")); r.appendChild(txt("Чувствительность головы ───●───", {color: "muted"})); r.appendChild(txt("Выразительность ────●──", {color: "muted"}));
+  add(r, btn("Запомнить центр (калибровка)"), {h: "FILL"});
   r.appendChild(section("Эмоции (клавиши 1–9)")); for (const t of ["0 · Без эмоции", "1 · Улыбка", "2 · Счастье ^^", "3 · Подмигивание"]) r.appendChild(txt(t));
   r.appendChild(section("Кадр и фон")); r.appendChild(txt("По пояс · Хромакей зелёный")); add(r, btn("Открыть окно для OBS"), {h: "FILL"});
 }

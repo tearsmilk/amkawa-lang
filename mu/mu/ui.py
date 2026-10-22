@@ -839,6 +839,15 @@ class MainWindow(QMainWindow):
         doc.select([model.meshes()[0].id])
         self.show_status("Выделите часть (глаз, бровь, рот…) и нажмите «Вырезать в новый слой»")
 
+    def open_example(self):
+        """The bundled example model (a schoolgirl cut from one picture, rigged, with poses and an idle loop)."""
+        from .paths import resource_path
+        path = resource_path("examples", "schoolgirl.mu")
+        if path.exists():
+            self.open_path(str(path))
+        else:
+            self.show_status("Пример не найден: examples/schoolgirl.mu")
+
     def open_dialog(self):
         if not self.maybe_save():
             return

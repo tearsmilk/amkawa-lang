@@ -18,7 +18,7 @@ ROLES = [
     ("back_hair", "Волосы сзади"),
     ("leg_l", "Левая нога (бедро)"), ("shin_l", "Левая голень"),
     ("leg_r", "Правая нога (бедро)"), ("shin_r", "Правая голень"),
-    ("body", "Тело"), ("neck", "Шея"), ("skirt", "Юбка"),
+    ("body", "Тело"), ("chest", "Грудь"), ("neck", "Шея"), ("skirt", "Юбка"),
     ("arm_l", "Левая рука: плечо"), ("forearm_l", "Левое предплечье"), ("hand_l", "Левая кисть"),
     ("arm_r", "Правая рука: плечо"), ("forearm_r", "Правое предплечье"), ("hand_r", "Правая кисть"),
     ("face", "Лицо"), ("ear", "Ухо"), ("blush", "Румянец"), ("nose", "Нос"),
@@ -62,7 +62,8 @@ _RULES = [
     (r"бедр|ног|leg|thigh|脚|太もも|もも", "leg"),
     (r"юбк|skirt|スカート", "skirt"),
     (r"волос|hair|髪", "back_hair"),
-    (r"тело|торс|body|torso|chest|грудь|одежд|cloth|shirt|dress|plat|плать|体|胴|服", "body"),
+    (r"груд|chest|bust|胸", "chest"),
+    (r"тело|торс|body|torso|одежд|cloth|shirt|dress|plat|плать|体|胴|服", "body"),
 ]
 _SIDED = {"eye_hl", "iris", "eye_white", "lower_lash", "lash", "brow", "eye", "hand", "forearm", "arm", "shin", "leg"}
 _LEFT = r"(^|[^a-zа-я])(л|лев|left|l)([^a-zа-я]|$)|левый|левая|левое|左"
@@ -252,6 +253,12 @@ def autorig(model, replace=True):
         for m in model.meshes():
             if m.parent is None:
                 m.parent = torso.id
+    chest_w = None
+    if R.get("chest"):
+        cb = box("chest")
+        chest_w = add(WarpDeformer(name="Грудь", parent=torso.id, rect=cb.rect(16 * S), rows=4, cols=4))
+        for m in R["chest"]:
+            m.parent = chest_w.id
     skirt_w = None
     if R.get("skirt"):
         sb = box("skirt")
@@ -389,6 +396,32 @@ def autorig(model, replace=True):
         x0, y0, ww, hh = skirt_w.rect
         chain_keys(skirt_w, (x0 + ww / 2, y0), (x0 + ww / 2, y0 + hh), ids, 12.0)
         physics.append(strand_group("Юбка", ids, stiffness=40, damping=5, gravity=0.5, body=True))
+
+    if chest_w is not None:
+        # breathing lifts the chest a little; a soft bounce follows the body with a stiff pendulum
+        model.add_param(Param("ParamChest", "Грудь (колебание)", -1, 1, 0, "Тело"))
+        cuv = chest_w.uv_of(chest_w.rest_grid())
+
+        def chest_breath(pts, k):
+            out = np.zeros_like(pts)
+            w = _bulge(cuv[:, 0]) * _bulge(cuv[:, 1])
+            out[:, 1] = -k * 4 * S * w
+            out[:, 0] = k * 3 * S * (cuv[:, 0] - 0.5) * w
+            return out
+
+        def chest_bounce(pts, k):
+            out = np.zeros_like(pts)
+            w = np.clip(cuv[:, 1], 0, 1) ** 1.3 * _bulge(cuv[:, 0])
+            out[:, 1] = k * 9 * S * w
+            out[:, 0] = k * 2 * S * (cuv[:, 0] - 0.5) * w
+            return out
+        _keys_fn(chest_w, "ParamBreath", [0, 1], chest_breath)
+        _keys_fn(chest_w, "ParamChest", [-1, 0, 1], chest_bounce)
+        physics.append(PhysGroup(name="Грудь", inputs=[{"param": "ParamBodyAngleY", "weight": 1.0, "kind": "x"},
+                                                       {"param": "ParamBodyAngleX", "weight": 0.5, "kind": "x"},
+                                                       {"param": "ParamAngleY", "weight": 0.3, "kind": "x"}],
+                                 output="ParamChest", scale=1.0, stiffness=70, damping=6, gravity=0.3))
+        notes.append("Грудь: дыхание и мягкое колебание")
 
     if face is not None:
         _rig_head(model, R, head, face, S, cx, sway, physics)

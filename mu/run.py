@@ -214,6 +214,55 @@ def selftest():
         assert len(live.driver.blinks) == 4
         assert abs(live.driver.track_value([[0, 0], [1, 10]], 0.5) - 5.0) < 1e-6
         assert live.driver.values
+        # face tracking: the models on a photo, then the camera section of the page (no camera here)
+        from mu import camera, tracking
+        assert tracking.models_available(), "assets/face or onnxruntime missing"
+        tr = tracking.FaceTracker()
+        photo = QImage(str(tracking.ASSETS / "test_face.jpg"))
+        rgb = camera.qimage_to_rgb(photo)
+        t0 = __import__("time").monotonic()
+        f = tr.process(rgb)
+        ms = (__import__("time").monotonic() - t0) * 1000
+        assert f is not None and f["score"] > 0.8 and abs(f["yaw"]) < 15 and abs(f["roll"]) < 15, f and f["score"]
+        assert f["eye_l"] > 0.5 and f["eye_r"] > 0.5 and f["mouth_open"] < 0.3
+        assert tr.process(rgb) is not None   # the second frame follows the previous landmarks
+        tr.roi = None
+        g = tr.process(rgb[:, ::-1].copy())  # a mirrored photo: the roll flips sign
+        assert g is not None and abs(g["roll"] + f["roll"]) < 3, (f["roll"], g["roll"])
+        prm = tracking.to_params(f)
+        assert {"ParamAngleX", "ParamEyeLOpen", "ParamMouthOpenY", "ParamEyeBallX"} <= set(prm)
+        live.driver.track = True
+        live.driver.set_face(dict(f, mouth_open=1.0, yaw=20.0))
+        for _ in range(40):
+            live.driver.step()
+        assert live.driver.values["ParamMouthOpenY"] > 0.8 and live.driver.values["ParamAngleX"] < -10
+        live.driver.calibrate()
+        live.driver.step()
+        live.driver.track = False
+        live.cam_on.setChecked(True)      # no camera in CI: the page reports it and switches itself off
+        app.processEvents()
+        assert not live.cam_on.isChecked() or live.feed is not None
+        live.cam_on.setChecked(False)
+        live.preview.show_frame(rgb, f, True)
+        assert not live.preview.pixmap().isNull()
+        report["tracking"] = {"ms": round(ms), "yaw": round(f["yaw"], 1), "eyes": round(f["eye_l"], 2)}
+        # the bundled example model: cut parts with roles, rig, poses; eyes close and the mouth opens
+        from mu.paths import resource_path
+        ex = fileio.load(resource_path("examples", "schoolgirl.mu"))
+        ex_roles = {x.role for x in ex.meshes()}
+        assert {"face", "iris_l", "iris_r", "eye_white_l", "lash_r", "mouth", "mouth_in", "bangs", "chest", "hand_r"} <= ex_roles
+        rest_f = ex.evaluate({p.id: p.default for p in ex.params})
+        shut = ex.evaluate(dict({p.id: p.default for p in ex.params}, ParamEyeLOpen=0.0, ParamEyeROpen=0.0,
+                                ParamMouthOpenY=1.0))
+        iris = next(x for x in ex.meshes() if x.role == "iris_l")
+        inner = next(x for x in ex.meshes() if x.role == "mouth_in")
+        assert shut.meshes[iris.id][1] < 0.05 and rest_f.meshes[iris.id][1] > 0.9
+        assert rest_f.meshes[inner.id][1] < 0.05 and shut.meshes[inner.id][1] > 0.9
+        assert len(ex.poses) >= 10 and ex.physics and ex.meta.get("idle")
+        win.open_example()
+        app.processEvents()
+        assert win.doc is not None and win.doc.model.name == ex.name
+        report["example"] = {"layers": len(ex.meshes()), "deformers": len(ex.deformers())}
         live.canvas.repaint()
         doc.mark_saved()
         win.dirty_extra = False

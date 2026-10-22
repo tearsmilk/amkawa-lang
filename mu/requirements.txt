@@ -2,3 +2,5 @@
 PySide6-Essentials==6.7.3
 numpy==1.26.4
 sounddevice==0.5.1
+PySide6-Addons==6.7.3
+onnxruntime==1.19.2

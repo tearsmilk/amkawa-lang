@@ -7,12 +7,15 @@ import time
 
 import numpy as np
 from PySide6.QtCore import QObject, QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QCursor, QGuiApplication, QKeySequence, QPainter, QShortcut, QTransform
+from PySide6.QtGui import (QColor, QCursor, QGuiApplication, QKeySequence, QPainter, QPixmap, QShortcut,
+                           QTransform)
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget, QProgressBar,
                                QPushButton, QScrollArea, QSlider, QVBoxLayout, QWidget)
 
+from .camera import CameraFeed, TrackerThread, cameras, multimedia_available
 from .panels import section
 from .physics import PhysicsSim
+from .tracking import models_available, to_params
 
 BACKGROUNDS = [("#00FF00", "Хромакей зелёный"), ("#0000FF", "Хромакей синий"), ("#FF00FF", "Пурпурный"),
                ("transparent", "Прозрачный"), ("theme", "Как в приложении")]
@@ -64,6 +67,51 @@ class Mic(QObject):
         self.level = 0.0
 
 
+# how fast the live values chase the camera (per second); eyes and mouth snap, the head glides
+TRACK_SPEED = {"ParamAngleX": 9.0, "ParamAngleY": 9.0, "ParamAngleZ": 9.0, "ParamBodyAngleX": 5.0,
+               "ParamBodyAngleY": 5.0, "ParamBodyAngleZ": 5.0, "ParamEyeLOpen": 24.0, "ParamEyeROpen": 24.0,
+               "ParamMouthOpenY": 24.0, "ParamMouthForm": 12.0, "ParamEyeBallX": 14.0, "ParamEyeBallY": 14.0,
+               "ParamBrowLY": 12.0, "ParamBrowRY": 12.0, "ParamEyeLSmile": 10.0, "ParamEyeRSmile": 10.0,
+               "ParamCheek": 6.0}
+
+
+class CameraPreview(QLabel):
+    """A small mirror of the camera with the tracked landmarks drawn over it."""
+
+    def __init__(self, colors):
+        super().__init__()
+        self.c = colors
+        self.setFixedSize(266, 150)
+        self.setAlignment(Qt.AlignCenter)
+        self.setObjectName("CameraPreview")
+        self.clear_frame()
+
+    def clear_frame(self):
+        self.setText("Камера выключена")
+        self.setPixmap(QPixmap())
+
+    def show_frame(self, rgb, res, mirror):
+        from .art import from_rgba
+        h, w = rgb.shape[:2]
+        rgba = np.dstack([rgb, np.full((h, w, 1), 255, np.uint8)])
+        img = from_rgba(rgba)
+        if mirror:
+            img = img.mirrored(True, False)
+        k = min(self.width() / w, self.height() / h)
+        img = img.scaled(int(w * k), int(h * k), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        if res is not None:
+            p = QPainter(img)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(self.c["accent"]))
+            for x, y, _ in res["landmarks"][::3]:
+                if mirror:
+                    x = w - x
+                p.drawEllipse(QPointF(x * k, y * k), 1.2, 1.2)
+            p.end()
+        self.setPixmap(QPixmap.fromImage(img))
+
+
 class LiveDriver(QObject):
     """Computes live parameter values ~60 times per second."""
     tick = Signal()
@@ -93,6 +141,14 @@ class LiveDriver(QObject):
         self.t0 = time.monotonic()
         self.last = time.monotonic()
         self.target_rect = None   # screen rect the mouse is measured against (None → primary screen)
+        # face tracking from the camera (see tracking.py): the latest features and when they arrived
+        self.track = False
+        self.face = None
+        self.face_t = 0.0
+        self.mirror = True
+        self.head_gain = 1.0
+        self.expr_gain = 1.0
+        self.calib = (0.0, 0.0, 0.0)   # yaw / pitch / roll that count as «looking straight»
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.step)
         self._frame = None
@@ -148,6 +204,27 @@ class LiveDriver(QObject):
         lo, hi = cfg.get("interval", (2.0, 5.5))
         self.next_blink = now + (n - 1) * cfg.get("gap", 0.38) + random.uniform(lo, hi)
 
+    def set_face(self, f):
+        self.face = f
+        if f is not None:
+            self.face_t = time.monotonic()
+
+    def tracked(self, now=None):
+        now = time.monotonic() if now is None else now
+        return self.track and self.face is not None and now - self.face_t < 0.7
+
+    def calibrate(self):
+        """The current head pose becomes the neutral one."""
+        if self.face is not None:
+            self.calib = (self.face["yaw"], self.face["pitch"], self.face["roll"])
+
+    def face_params(self):
+        f = dict(self.face)
+        f["yaw"] -= self.calib[0]
+        f["pitch"] -= self.calib[1]
+        f["roll"] -= self.calib[2]
+        return to_params(f, self.mirror, self.head_gain, self.expr_gain)
+
     def set_emotion(self, values):
         self.emotion = dict(values or {})
         self.emotion_t = time.monotonic()
@@ -175,7 +252,11 @@ class LiveDriver(QObject):
         for pid, v in self.emotion.items():
             if m.param(pid) is not None:
                 vals[pid] = v
-        if self.follow:
+        tracked = self.tracked(now)
+        if tracked:
+            for pid, v in self.face_params().items():
+                self._set(vals, pid, v, TRACK_SPEED.get(pid, 10.0), dt)
+        elif self.follow:
             cur = QCursor.pos()
             rect = self.target_rect
             if rect is None:
@@ -202,7 +283,7 @@ class LiveDriver(QObject):
                     w = math.copysign(abs(w) ** pw, w)
                 dev = vals.get(p.id, p.default) - p.default  # mouse follow / emotion stay on top
                 vals[p.id] = p.clamp(float(loop.get("center", p.default)) + float(loop.get("amp", 0.0)) * w + dev)
-        if self.idle:
+        if self.idle and not tracked:
             for pid, amp, f in (("ParamAngleZ", 3.0, 0.21), ("ParamBodyAngleZ", 2.0, 0.17)):
                 p = self._p(pid)
                 if p is not None:
@@ -219,7 +300,7 @@ class LiveDriver(QObject):
                     v = self.track_value(track, tc)
                     if p is not None and v is not None:
                         vals[pid] = p.clamp(v)
-        if self.blink:
+        if self.blink and not tracked:   # the camera sees the real blinks
             if not self.blinks and now >= self.next_blink:
                 self.plan_blinks(now)
             ks = {"ParamEyeLOpen": 1.0, "ParamEyeROpen": 1.0}
@@ -418,6 +499,42 @@ class LivePage(QWidget):
         self.meter.setMaximumHeight(6)
         v.addWidget(self.meter)
         v.addSpacing(6)
+        v.addWidget(section("Камера → лицо"))
+        self.cam_on = QCheckBox("Отслеживать лицо по камере")
+        self.cam_on.toggled.connect(self.toggle_camera)
+        v.addWidget(self.cam_on)
+        self.cam_dev = QComboBox()
+        self.cam_dev.addItem("Камера по умолчанию", None)
+        for i, name in cameras():
+            self.cam_dev.addItem(name, i)
+        self.cam_dev.currentIndexChanged.connect(lambda _: self.toggle_camera(self.cam_on.isChecked()))
+        v.addWidget(self.cam_dev)
+        self.preview = CameraPreview(colors)
+        v.addWidget(self.preview, 0, Qt.AlignHCenter)
+        self.cam_status = QLabel("Голова, глаза, брови и рот повторяют ваши — как в VTube Studio.")
+        self.cam_status.setWordWrap(True)
+        self.cam_status.setObjectName("Muted")
+        v.addWidget(self.cam_status)
+        self.mirror = QCheckBox("Зеркально (как в зеркале)")
+        self.mirror.setChecked(bool(win.settings.get("track_mirror", True)))
+        self.mirror.toggled.connect(self._mirror)
+        v.addWidget(self.mirror)
+        for key, text, lo, hi, default in (("track_head", "Чувствительность головы", 50, 250, 1.0),
+                                           ("track_expr", "Выразительность", 50, 200, 1.0)):
+            g = QHBoxLayout()
+            g.addWidget(QLabel(text))
+            sl = QSlider(Qt.Horizontal)
+            sl.setRange(lo, hi)
+            sl.setValue(int(100 * float(win.settings.get(key, default))))
+            sl.valueChanged.connect(lambda val, k=key: self._track_gain(k, val))
+            g.addWidget(sl)
+            v.addLayout(g)
+            setattr(self, key, sl)
+        cal = QPushButton("Запомнить центр (калибровка)")
+        cal.setToolTip("Посмотрите прямо в камеру и нажмите: эта поза головы станет нейтральной")
+        cal.clicked.connect(self.calibrate)
+        v.addWidget(cal)
+        v.addSpacing(6)
         v.addWidget(section("Эмоции (клавиши 1–9)"))
         self.emotions = QListWidget()
         self.emotions.setMaximumHeight(180)
@@ -452,6 +569,11 @@ class LivePage(QWidget):
         v.addStretch(1)
         lay.addWidget(side)
         self.canvas = None
+        self.feed = None
+        self.tracker = None
+        self.last_rgb = None
+        self.fps_t = time.monotonic()
+        self.fps_n = 0
         self.meter_timer = QTimer(self)
         self.meter_timer.timeout.connect(self._meter)
         for i in range(9):
@@ -470,6 +592,9 @@ class LivePage(QWidget):
             self.driver.set_model(doc.model)
             self.canvas.renderer = doc.renderer
         self.canvas.bg = self.bg.currentData()
+        self.driver.mirror = self.mirror.isChecked()
+        self.driver.head_gain = self.track_head.value() / 100
+        self.driver.expr_gain = self.track_expr.value() / 100
         self.fill_emotions()
         self.fill_clips()
         self.driver.step()
@@ -514,6 +639,82 @@ class LivePage(QWidget):
             self.driver.set_emotion({})
             self.emotions.setCurrentRow(0)
 
+    # ------------------------------------------------------------------ camera → face
+    def toggle_camera(self, on):
+        if self.driver is None:
+            return
+        if not on:
+            if self.feed is not None:
+                self.feed.stop()
+            self.driver.track = False
+            self.driver.set_face(None)
+            self.preview.clear_frame()
+            return
+        if not models_available():
+            return self._camera_failed("Модели трекинга не найдены (assets/face) или нет onnxruntime")
+        if not multimedia_available():
+            return self._camera_failed("Qt Multimedia не установлен (PySide6-Addons) — камера недоступна")
+        if self.tracker is None:
+            self.tracker = TrackerThread()
+            self.tracker.result.connect(self._tracked)
+            self.tracker.failed.connect(self._camera_failed)
+        if self.feed is None:
+            self.feed = CameraFeed()
+            self.feed.frame.connect(self._frame)
+            self.feed.error.connect(self._camera_failed)
+        if not self.feed.start(self.cam_dev.currentData()):
+            return
+        self.driver.track = True
+        self.driver.mirror = self.mirror.isChecked()
+        self.cam_status.setText("Камера включена, ищу лицо…")
+        self.fps_t, self.fps_n = time.monotonic(), 0
+        if not self.driver.timer.isActive():
+            self.toggle()
+
+    def _camera_failed(self, msg):
+        self.status.emit("Камера: " + msg)
+        self.cam_status.setText(msg)
+        if self.feed is not None:
+            self.feed.stop()
+        if self.driver is not None:
+            self.driver.track = False
+        self.cam_on.blockSignals(True)
+        self.cam_on.setChecked(False)
+        self.cam_on.blockSignals(False)
+
+    def _frame(self, rgb):
+        self.last_rgb = rgb
+        if self.tracker is not None:
+            self.tracker.push(rgb)
+
+    def _tracked(self, res):
+        if self.driver is None:
+            return
+        self.driver.set_face(res)
+        self.fps_n += 1
+        now = time.monotonic()
+        if now - self.fps_t >= 1.0:
+            fps = self.fps_n / (now - self.fps_t)
+            self.fps_t, self.fps_n = now, 0
+            self.cam_status.setText((f"Лицо найдено · {fps:.0f} к/с" if res is not None else "Лицо не найдено"))
+        if self.last_rgb is not None:
+            self.preview.show_frame(self.last_rgb, res, self.mirror.isChecked())
+
+    def _mirror(self, on):
+        if self.driver is not None:
+            self.driver.mirror = on
+        self.win.settings["track_mirror"] = on
+
+    def _track_gain(self, key, val):
+        self.win.settings[key] = val / 100
+        if self.driver is not None:
+            setattr(self.driver, "head_gain" if key == "track_head" else "expr_gain", val / 100)
+
+    def calibrate(self):
+        if self.driver is not None:
+            self.driver.calibrate()
+            self.status.emit("Центр запомнен")
+
     def _flag(self, key, on):
         if self.driver is not None:
             setattr(self.driver, key, on)
@@ -550,6 +751,7 @@ class LivePage(QWidget):
             self.driver.stop()
         self.meter_timer.stop()
         self.mic_on.setChecked(False)
+        self.cam_on.setChecked(False)
         self.b_run.setText("Запустить эфир")
 
     def toggle_mic(self, on):
@@ -586,6 +788,9 @@ class LivePage(QWidget):
 
     def shutdown(self):
         self.stop()
+        if self.tracker is not None:
+            self.tracker.shutdown()
+            self.tracker = None
         if self.obs is not None:
             self.obs.close()
             self.obs = None
