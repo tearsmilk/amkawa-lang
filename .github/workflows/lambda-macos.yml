@@ -3,6 +3,7 @@ name: Лямбда — Lambda (macOS Intel .dmg)
 # push only: for pull_request GitHub matches `paths` against the whole PR diff, which rebuilt every app
 on:
   push:
+    branches: ["**"]
     paths:
       - "lambda/**"
       - ".github/workflows/lambda-macos.yml"

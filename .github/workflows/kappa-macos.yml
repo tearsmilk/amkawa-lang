@@ -3,6 +3,7 @@ name: Каппа — Kappa (macOS Intel .dmg)
 # push only: for pull_request GitHub matches `paths` against the whole PR diff, which rebuilt every app
 on:
   push:
+    branches: ["**"]
     paths:
       - "kappa/**"
       - ".github/workflows/kappa-macos.yml"

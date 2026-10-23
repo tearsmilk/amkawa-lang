@@ -3,6 +3,7 @@ name: Мю — Mu (macOS Intel .dmg)
 # push only: for pull_request GitHub matches `paths` against the whole PR diff, which rebuilt every app
 on:
   push:
+    branches: ["**"]
     paths:
       - "mu/**"
       - ".github/workflows/mu-macos.yml"

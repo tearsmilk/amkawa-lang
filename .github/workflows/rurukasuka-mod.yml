@@ -3,6 +3,7 @@ name: rurukaSuka — мод (Fabric)
 # push only: for pull_request GitHub matches `paths` against the whole PR diff, which rebuilt every app
 on:
   push:
+    branches: ["**"]
     paths:
       - "rurukasuka/**"
       - ".github/workflows/rurukasuka-mod.yml"
