@@ -15,6 +15,9 @@
   compact instance card, live Modrinth and CurseForge catalogs (`.mrpack` / CurseForge zip install, sha1-checked mod downloads;
   CurseForge needs an API key from console.curseforge.com in settings), own instances, offline accounts, settings with «Оформление» — accent, window background, glass, side bar
   left / right / folded; `eta/launch.py` downloads Minecraft, Mojang's Java runtime, Fabric / Quilt / Forge / NeoForge and runs the game; accounts: offline, mc-ru.org, Microsoft). All target macOS 11+ Intel x64 and are built into `.dmg` by `.github/workflows/*-macos.yml` (self-test included); Эта is also built into a single Windows x64 `Eta.exe` by `.github/workflows/eta-windows.yml` (`eta/packaging/Eta-windows.spec`, `build_windows.ps1`).
+  `rurukasuka/` — rurukaSuka, client Fabric cosmetics mod for Minecraft 1.21.11 (wardrobe, руры, friends; talks to mc-ru.org,
+  Mojang mappings, Gradle wrapper, built by `.github/workflows/rurukasuka-mod.yml`, releases `rurukasuka-v*`); Эта installs it into
+  Fabric/Quilt instances as a system mod and hands over the mc-ru.org session via `config/rurukasuka_launcher.json`.
 - **Epsilon design lives in Figma** (file `P9vRt9ShTejyOkC7fYqWU4`, team Lotus): the UI kit and *every* screen.
   When you add or change a screen, dialog or component in Epsilon, update `epsilon/design/figma/01_ui_kit.js` /
   `02_screens.js` in the same change and run them via the Figma MCP `use_figma` tool (Starter plan has a small
