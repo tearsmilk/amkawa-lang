@@ -1,0 +1,60 @@
+name: Эта — Eta (Windows x64 .exe)
+
+on:
+  push:
+    paths:
+      - "eta/**"
+      - ".github/workflows/eta-windows.yml"
+    tags:
+      - "eta-v*"
+  pull_request:
+    paths:
+      - "eta/**"
+      - ".github/workflows/eta-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: eta
+        shell: pwsh
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --only-binary=:all: -r requirements-build.txt
+
+      - name: Self-test from source
+        run: python run.py --selftest
+
+      - name: Build Eta.exe (includes Eta.exe --selftest)
+        run: |
+          if ("$env:GITHUB_REF" -like "refs/tags/eta-v*") { $env:APP_VERSION = "$env:GITHUB_REF" -replace "^refs/tags/eta-v", "" }
+          pwsh packaging/build_windows.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Eta-Windows-x64
+          path: |
+            eta/dist/Eta-*-windows-x64.exe
+            eta/dist/Прочти меня.txt
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/eta-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: eta/dist/Eta-*-windows-x64.exe
