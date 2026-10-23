@@ -12,9 +12,9 @@
   ffmpeg from `imageio-ffmpeg`), `alpha/` — Альфа / Alpha (α, local Trello-like kanban: boards, lists, cards with
   labels / members / dates / checklists / attachments / covers / custom fields, drag and drop, table / calendar /
   dashboard views, Butler-like automation, Trello JSON import), `eta/` — Эта / Eta (η, Minecraft launcher: loading page, home with a
-  compact instance card, live Modrinth catalog + `.mrpack` install (sha1-checked mod downloads; CurseForge still a demo
-  provider), own instances, offline accounts, settings with «Оформление» — accent, window background, glass, side bar
-  left / right / folded; `eta/launch.py` downloads Minecraft, Mojang's Java runtime, Fabric / Quilt / Forge / NeoForge and runs the game; CurseForge and Microsoft sign-in come next). All target macOS 11+ Intel x64 and are built into `.dmg` by `.github/workflows/*-macos.yml` (self-test included); Эта is also built into a single Windows x64 `Eta.exe` by `.github/workflows/eta-windows.yml` (`eta/packaging/Eta-windows.spec`, `build_windows.ps1`).
+  compact instance card, live Modrinth and CurseForge catalogs (`.mrpack` / CurseForge zip install, sha1-checked mod downloads;
+  CurseForge needs an API key from console.curseforge.com in settings), own instances, offline accounts, settings with «Оформление» — accent, window background, glass, side bar
+  left / right / folded; `eta/launch.py` downloads Minecraft, Mojang's Java runtime, Fabric / Quilt / Forge / NeoForge and runs the game; accounts: offline, mc-ru.org, Microsoft). All target macOS 11+ Intel x64 and are built into `.dmg` by `.github/workflows/*-macos.yml` (self-test included); Эта is also built into a single Windows x64 `Eta.exe` by `.github/workflows/eta-windows.yml` (`eta/packaging/Eta-windows.spec`, `build_windows.ps1`).
 - **Epsilon design lives in Figma** (file `P9vRt9ShTejyOkC7fYqWU4`, team Lotus): the UI kit and *every* screen.
   When you add or change a screen, dialog or component in Epsilon, update `epsilon/design/figma/01_ui_kit.js` /
   `02_screens.js` in the same change and run them via the Figma MCP `use_figma` tool (Starter plan has a small
