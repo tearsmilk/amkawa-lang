@@ -29,6 +29,7 @@ jobs:
         working-directory: eta
     env:
       PYTHON_VERSION: "3.11.9"
+      ETA_CURSEFORGE_KEY: ${{ secrets.ETA_CURSEFORGE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
