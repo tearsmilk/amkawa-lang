@@ -1,5 +1,6 @@
 name: Epsilon (macOS Intel .dmg)
 
+# push only: for pull_request GitHub matches `paths` against the whole PR diff, which rebuilt every app
 on:
   push:
     paths:
@@ -7,10 +8,6 @@ on:
       - ".github/workflows/epsilon-macos.yml"
     tags:
       - "epsilon-v*"
-  pull_request:
-    paths:
-      - "epsilon/**"
-      - ".github/workflows/epsilon-macos.yml"
   workflow_dispatch:
 
 permissions:

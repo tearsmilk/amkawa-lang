@@ -1,5 +1,6 @@
 name: Эта — Eta (Windows x64 .exe)
 
+# push only: for pull_request GitHub matches `paths` against the whole PR diff, which rebuilt every app
 on:
   push:
     paths:
@@ -7,10 +8,6 @@ on:
       - ".github/workflows/eta-windows.yml"
     tags:
       - "eta-v*"
-  pull_request:
-    paths:
-      - "eta/**"
-      - ".github/workflows/eta-windows.yml"
   workflow_dispatch:
     inputs:
       release_version:
