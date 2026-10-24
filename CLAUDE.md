@@ -18,11 +18,15 @@
   `rurukasuka/` — rurukaSuka, client Fabric cosmetics mod for Minecraft 1.21.11 (wardrobe, руры, friends; talks to mc-ru.org,
   Mojang mappings, Gradle wrapper, built by `.github/workflows/rurukasuka-mod.yml`, releases `rurukasuka-v*`); Эта installs it into
   Fabric/Quilt instances as a system mod and hands over the mc-ru.org session via `config/rurukasuka_launcher.json`.
+  `theta/` — Тета / Theta (θ, local GeoGuessr-like game, macOS only: Google Street View in QtWebEngine (own key, free
+  Metadata API picks the pano), Mapillary panoramas (token) and Wikimedia Commons photos, own OSM slippy map for the
+  guess, Natural Earth countries bundled for land-only picks and the country-streak mode; classic / streak / daily,
+  local records; built into `.dmg` by `.github/workflows/theta-macos.yml`).
 - **Epsilon design lives in Figma** (file `P9vRt9ShTejyOkC7fYqWU4`, team Lotus): the UI kit and *every* screen.
   When you add or change a screen, dialog or component in Epsilon, update `epsilon/design/figma/01_ui_kit.js` /
   `02_screens.js` in the same change and run them via the Figma MCP `use_figma` tool (Starter plan has a small
   monthly MCP call limit — if it is hit, schedule a retry and tell the user).
-- **Ню, Дзета, Дельта, Лямбда, Мю, Гамма, Альфа and Эта designs** follow the same rule: `nu/design/figma/*.js` → Figma file «Ню — UI»,
+- **Ню, Дзета, Дельта, Лямбда, Мю, Гамма, Альфа, Эта and Тета designs** follow the same rule (`theta/design/figma/*.js` → «Тета — UI»): `nu/design/figma/*.js` → Figma file «Ню — UI»,
   `zeta/design/figma/*.js` → «Дзета — UI», `delta/design/figma/*.js` → «Дельта — UI», `lambda/design/figma/*.js` →
   «Лямбда — UI», `mu/design/figma/*.js` → «Мю — UI», `gamma/design/figma/*.js` → «Гамма — UI», `alpha/design/figma/*.js` → «Альфа — UI»,
   `eta/design/figma/*.js` → «Эта — UI» (team Lotus, create them on the first run).

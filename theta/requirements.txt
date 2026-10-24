@@ -1,0 +1,4 @@
+# Runtime (versions with macOS 11 / Intel x86_64 wheels). Addons = QtWebEngine + QtWebChannel for Street View.
+PySide6-Essentials==6.7.3
+PySide6-Addons==6.7.3
+certifi==2024.8.30
