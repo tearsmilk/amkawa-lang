@@ -18,7 +18,7 @@ for s in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o build/Theta.icns
 
-"$PY" -m PyInstaller --noconfirm --clean --windowed --distpath dist --workpath build/pyi packaging/Theta.spec
+"$PY" -m PyInstaller --noconfirm --clean --distpath dist --workpath build/pyi packaging/Theta.spec
 APP="dist/Theta.app"
 xattr -cr "$APP"
 codesign --force --deep --sign - "$APP"
