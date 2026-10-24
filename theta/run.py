@@ -1,4 +1,5 @@
 """Entry point (PyInstaller / `python run.py`). `--selftest` runs headless checks for CI."""
+import os
 import sys
 
 
@@ -72,7 +73,10 @@ def selftest():
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         code = selftest()
-        sys.exit(code)
+        # the result is already printed; skip Qt/WebEngine teardown, which can crash offscreen
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(code)
     from theta.ui import main
 
     sys.exit(main())

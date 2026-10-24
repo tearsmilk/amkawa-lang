@@ -288,7 +288,12 @@ def run(tmp=None, with_webengine=True):
             panel.failed.connect(msgs.append)
             panel.bridge.message("status", "ZERO_RESULTS")
             assert msgs and "ZERO_RESULTS" in msgs[0]
+            # the page must be gone before QApplication tears down the WebEngine profile (else a segfault at exit)
+            from PySide6.QtCore import QCoreApplication, QEvent
+            panel.close()
             panel.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            app.processEvents()
         return {"calls": calls}
     finally:
         mapillary.API, commons.API, streetview.META, geo.tile_url = saved
