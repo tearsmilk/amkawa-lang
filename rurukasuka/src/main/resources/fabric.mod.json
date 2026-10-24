@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "rurukasuka",
+  "version": "${version}",
+  "name": "rurukaSuka",
+  "description": "Косметика, гардероб и соц-приколы для Minecraft.",
+  "authors": [
+    "ruruka",
+    "Sakyu",
+    "nakuZen"
+  ],
+  "license": "ARR",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "ruruka.suka.rurukasuka.RurukaSukaClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.5",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "mixins": [
+    "rurukasuka.mixins.json"
+  ]
+}

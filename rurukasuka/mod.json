@@ -1,0 +1,9 @@
+{
+  "id": "rurukasuka",
+  "version": "${version}",
+  "mc_versions": ["1.21.11"],
+  "loaders": ["fabric", "quilt"],
+  "requires": [{"modrinth": "fabric-api"}],
+  "site": "https://mc-ru.org",
+  "launcher_file": "config/rurukasuka_launcher.json"
+}

@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "ruruka.suka.rurukasuka.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["GuiRendererMixin", "GuiGraphicsAccessor"],
+  "injectors": { "defaultRequire": 1 }
+}
