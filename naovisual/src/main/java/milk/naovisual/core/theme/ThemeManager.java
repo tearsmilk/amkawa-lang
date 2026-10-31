@@ -2,7 +2,7 @@ package milk.naovisual.core.theme;
 
 /** Текущая тема; модуль «Тема» подменяет её. */
 public final class ThemeManager {
-    private static Theme current = Theme.CLAUDE;
+    private static Theme current = Theme.BLACK.withOpacity(0.75f);
 
     private ThemeManager() {}
 

@@ -15,7 +15,13 @@ public final class Theme {
 
     public String name() { return name; }
 
-    /** Основная тема: слоновая кость / уголь / терракота — «как у Клода». */
+    /** Основная тема: чёрные полупрозрачные панели, белый текст, терракотовый акцент; непрозрачность задаёт слайдер
+     *  «Прозрачность меню» модуля «Тема» (по умолчанию 75 %). */
+    public static final Theme BLACK = new Theme("Чёрная 75 %",
+            0xFF000000, 0xFF111111, 0xFF0A0A0A, 0x1FFFFFFF,
+            0xFFF4F4F4, 0xFFBDBDBD, 0xFFD97757, 0x40D97757, 0xFFE05A4F, 0xFF6FBF7A, false);
+
+    /** Слоновая кость / уголь / терракота — «как у Клода». */
     public static final Theme CLAUDE = new Theme("Клод",
             0xF2F4F1EC, 0xFFFFFFFF, 0xFFF0EDE6, 0xFFE2DDD3,
             0xFF2B2A28, 0xFF8A857C, 0xFFD97757, 0x33D97757, 0xFFC84B3C, 0xFF5FA36A, true);
@@ -36,12 +42,24 @@ public final class Theme {
             0xF2101A22, 0xFF18262F, 0xFF1F303B, 0xFF2B4150,
             0xFFE9F1F5, 0xFF8FA6B3, 0xFF4FB3D9, 0x404FB3D9, 0xFFE05A4F, 0xFF6FBF7A, false);
 
-    public static final java.util.List<Theme> ALL = java.util.List.of(CLAUDE, NIGHT, MILK, SAKURA, OCEAN);
+    public static final java.util.List<Theme> ALL = java.util.List.of(BLACK, CLAUDE, NIGHT, MILK, SAKURA, OCEAN);
 
     public static Theme byName(String name) {
         for (Theme t : ALL) if (t.name.equals(name)) return t;
-        return CLAUDE;
+        return BLACK;
     }
+
+    /** Подсветка строки под курсором: на тёмных темах — белый 8 %, на светлых — панель. */
+    public int hover() { return light ? panel : 0x14FFFFFF; }
+
+    /** Умножает непрозрачность фона, панелей и рамок (текст и акцент не трогаем). */
+    public Theme withOpacity(float factor) {
+        float f = Math.max(0f, Math.min(1f, factor));
+        return new Theme(name, mulA(background, f), mulA(panel, f), mulA(panelAlt, f), mulA(border, f),
+                text, textMuted, accent, accentSoft, danger, success, light);
+    }
+
+    private static int mulA(int c, float f) { return (c & 0xFFFFFF) | (Math.round(((c >>> 24) & 0xFF) * f) << 24); }
 
     public Theme withAccent(int newAccent) {
         return new Theme(name, background, panel, panelAlt, border, text, textMuted, newAccent,

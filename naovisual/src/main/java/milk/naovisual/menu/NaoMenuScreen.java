@@ -38,7 +38,10 @@ import java.util.function.IntConsumer;
 public class NaoMenuScreen extends Screen {
     public static final int DESIGN_W = 966, DESIGN_H = 699;
     private static final int SIDEBAR_W = 200, LIST_W = 300, PAD = 14, RADIUS = 14;
-    private static final float TXT = 1.3f, SMALL = 1.1f, HEAD = 2.0f;
+    // Желаемые множители шрифта в дизайнерских единицах; в init() пересчитываются так, чтобы итоговый масштаб
+    // на экране был «чистым» (кратным 0,5 и не меньше 1) — иначе текст размывается и становится нечитаемым.
+    private static final float TXT_D = 1.3f, SMALL_D = 1.1f, HEAD_D = 2.0f;
+    private float TXT = TXT_D, SMALL = SMALL_D, HEAD = HEAD_D, LOGO = HEAD_D * 1.3f;
 
     private record Hit(int x, int y, int w, int h, IntConsumer onClick, Consumer<double[]> onDrag, Consumer<Double> onScroll, Runnable onRelease) {
         boolean contains(double px, double py) { return px >= x && px < x + w && py >= y && py < y + h; }
@@ -81,13 +84,18 @@ public class NaoMenuScreen extends Screen {
         ModuleRegistry.get(ThemeModule.class).onMenuOpen();
         open.to(1f);
         float sx = (width - 16) / (float) DESIGN_W, sy = (height - 16) / (float) DESIGN_H;
-        scale = Math.min(1f, Math.min(sx, sy));
-        scale = Math.max(scale, 0.5f);
+        float fit = Math.max(0.5f, Math.min(1f, Math.min(sx, sy)));
+        float half = (float) Math.floor(fit * 2f) / 2f;          // кратный 0,5 масштаб, если он не ужимает меню больше чем на 10 %
+        scale = half >= fit * 0.9f ? half : fit;
+        TXT = crisp(TXT_D); SMALL = crisp(SMALL_D); HEAD = crisp(HEAD_D); LOGO = crisp(HEAD_D * 1.3f);
         ox = Math.round((width - DESIGN_W * scale) / 2f);
         oy = Math.round((height - DESIGN_H * scale) / 2f);
     }
 
     public float menuScale() { return scale; }
+
+    /** Множитель в дизайнерских единицах, дающий на экране чистый масштаб шрифта (см. Render2D.crispScale). */
+    private float crisp(float design) { return Render2D.crispScale(design * scale) / scale; }
 
     // --- отрисовка ----------------------------------------------------------------------------------
     // Ваниль размывает фон один раз за кадр внутри renderBackground (второй вызов blurBeforeThisStratum —
@@ -139,22 +147,22 @@ public class NaoMenuScreen extends Screen {
         g.fill(SIDEBAR_W, 0, SIDEBAR_W + 1, DESIGN_H, t.border);
 
         // логотип
-        Render2D.textScaled(g, "Nao", PAD + 4, PAD + 6, HEAD * 1.3f, t.text, false);
-        Render2D.textScaled(g, "Visual", PAD + 4 + Render2D.width("Nao") * HEAD * 1.3f, PAD + 6, HEAD * 1.3f, t.accent, false);
-        Render2D.textScaled(g, "v" + NaoVisual.version() + " • " + ConfigManager.profile(), PAD + 4, PAD + 34, SMALL, t.textMuted, false);
+        Render2D.textCrisp(g, "Nao", PAD + 4, PAD + 6, LOGO, t.text, false);
+        Render2D.textCrisp(g, "Visual", PAD + 4 + Render2D.width("Nao") * LOGO, PAD + 6, LOGO, t.accent, false);
+        Render2D.textCrisp(g, "v" + NaoVisual.version() + " • " + ConfigManager.profile(), PAD + 4, PAD + 34, SMALL, t.textMuted, false);
 
         int y = PAD + 60;
         for (ModuleCategory c : ModuleCategory.values()) {
             boolean sel = MenuState.page == MenuState.Page.MODULES && MenuState.category == c;
             boolean hover = hover(PAD, y, SIDEBAR_W - PAD * 2, 34);
-            if (sel) Render2D.roundedRect(g, PAD, y, SIDEBAR_W - PAD * 2, 34, 9, t.accent);
-            else if (hover) Render2D.roundedRect(g, PAD, y, SIDEBAR_W - PAD * 2, 34, 9, t.panel);
+            if (sel) Render2D.roundedRect(g, PAD, y, SIDEBAR_W - PAD * 2, 34, 9, ColorUtil.withAlpha(t.accent, 217));
+            else if (hover) Render2D.roundedRect(g, PAD, y, SIDEBAR_W - PAD * 2, 34, 9, t.hover());
             int txt = sel ? 0xFFFFFFFF : t.text;
-            Render2D.textScaled(g, icon(c), PAD + 12, y + 10, TXT, sel ? 0xFFFFFFFF : t.accent, false);
-            Render2D.textScaled(g, c.title(), PAD + 34, y + 11, TXT, txt, false);
+            Render2D.textCrisp(g, icon(c), PAD + 12, y + 10, TXT, sel ? 0xFFFFFFFF : t.accent, false);
+            Render2D.textCrisp(g, c.title(), PAD + 34, y + 11, TXT, txt, false);
             int count = 0;
             for (Module m : ModuleRegistry.byCategory(c)) if (m.isEnabled()) count++;
-            if (count > 0) Render2D.textScaled(g, String.valueOf(count), SIDEBAR_W - PAD - 22, y + 11, TXT, sel ? 0xFFFFFFFF : t.textMuted, false);
+            if (count > 0) Render2D.textCrisp(g, String.valueOf(count), SIDEBAR_W - PAD - 22, y + 11, TXT, sel ? 0xFFFFFFFF : t.textMuted, false);
             final ModuleCategory cat = c;
             hits.add(new Hit(PAD, y, SIDEBAR_W - PAD * 2, 34, b -> {
                 MenuState.page = MenuState.Page.MODULES;
@@ -174,7 +182,7 @@ public class NaoMenuScreen extends Screen {
         boolean hover = hover(PAD, y, SIDEBAR_W - PAD * 2, 34);
         Render2D.roundedRect(g, PAD, y, SIDEBAR_W - PAD * 2, 34, 9, sel ? t.accentSoft : hover ? t.panel : 0);
         Render2D.roundedOutline(g, PAD, y, SIDEBAR_W - PAD * 2, 34, 9, sel ? t.accent : t.border);
-        Render2D.textScaled(g, label, PAD + 12, y + 11, TXT, t.text, false);
+        Render2D.textCrisp(g, label, PAD + 12, y + 11, TXT, t.text, false);
         hits.add(new Hit(PAD, y, SIDEBAR_W - PAD * 2, 34, b -> action.run(), null, null, null));
     }
 
@@ -199,7 +207,7 @@ public class NaoMenuScreen extends Screen {
         // поиск
         drawTextField(g, t, search, x0 + PAD, PAD, w - PAD * 2, 32, "Поиск…");
         String title = search.text.isBlank() ? MenuState.category.title() : "Результаты поиска";
-        Render2D.textScaled(g, title, x0 + PAD + 2, PAD + 44, SMALL, t.textMuted, false);
+        Render2D.textCrisp(g, title, x0 + PAD + 2, PAD + 44, SMALL, t.textMuted, false);
 
         int top = PAD + 62, bottom = DESIGN_H - PAD;
         List<Module> mods = visibleModules();
@@ -214,13 +222,13 @@ public class NaoMenuScreen extends Screen {
                 boolean hover = hover(x0 + PAD, y, w - PAD * 2, rowH) && mouseY >= top && mouseY < bottom;
                 Render2D.roundedRect(g, x0 + PAD, y, w - PAD * 2, rowH, 10, hover || selected ? t.panel : withA(t.panel, t.light ? 170 : 110));
                 if (selected) Render2D.roundedOutline(g, x0 + PAD, y, w - PAD * 2, rowH, 10, t.accent);
-                Render2D.textScaled(g, m.displayName(), x0 + PAD + 14, y + 12, TXT, t.text, false);
-                Render2D.textScaled(g, Render2D.trim(m.description(), (int) ((w - PAD * 2 - 90) / SMALL)), x0 + PAD + 14, y + 32, SMALL, t.textMuted, false);
+                Render2D.textCrisp(g, m.displayName(), x0 + PAD + 14, y + 12, TXT, t.text, false);
+                Render2D.textCrisp(g, Render2D.trim(m.description(), (int) ((w - PAD * 2 - 90) / SMALL)), x0 + PAD + 14, y + 32, SMALL, t.textMuted, false);
                 if (m.bind.isBound()) {
                     String k = m.bind.display();
                     int kw = (int) (Render2D.width(k) * SMALL) + 10;
                     Render2D.roundedRect(g, x0 + w - PAD - 74 - kw, y + 10, kw, 16, 5, t.panelAlt);
-                    Render2D.textScaled(g, k, x0 + w - PAD - 74 - kw + 5, y + 14, SMALL, t.textMuted, false);
+                    Render2D.textCrisp(g, k, x0 + w - PAD - 74 - kw + 5, y + 14, SMALL, t.textMuted, false);
                 }
                 drawSwitch(g, t, x0 + w - PAD - 60, y + rowH / 2 - 11, m.isEnabled());
                 final Module mod = m;
@@ -247,8 +255,8 @@ public class NaoMenuScreen extends Screen {
         int x0 = SIDEBAR_W + 1 + LIST_W + 1, w = DESIGN_W - x0, cw = w - PAD * 2;
         Module m = MenuState.selected;
         if (m == null) {
-            Render2D.textScaled(g, "Выберите модуль", x0 + w / 2f - Render2D.width("Выберите модуль") * TXT / 2f, DESIGN_H / 2f - 20, TXT, t.textMuted, false);
-            Render2D.textScaled(g, "ЛКМ — настройки, переключатель — вкл/выкл, ПКМ — быстрое переключение", x0 + w / 2f - Render2D.width("ЛКМ — настройки, переключатель — вкл/выкл, ПКМ — быстрое переключение") * SMALL / 2f, DESIGN_H / 2f, SMALL, t.textMuted, false);
+            Render2D.textCrisp(g, "Выберите модуль", x0 + w / 2f - Render2D.width("Выберите модуль") * TXT / 2f, DESIGN_H / 2f - 20, TXT, t.textMuted, false);
+            Render2D.textCrisp(g, "ЛКМ — настройки, переключатель — вкл/выкл, ПКМ — быстрое переключение", x0 + w / 2f - Render2D.width("ЛКМ — настройки, переключатель — вкл/выкл, ПКМ — быстрое переключение") * SMALL / 2f, DESIGN_H / 2f, SMALL, t.textMuted, false);
             return;
         }
         int top = PAD, bottom = DESIGN_H - PAD;
@@ -256,11 +264,11 @@ public class NaoMenuScreen extends Screen {
         Render2D.scissor(g, x0, top, w, bottom - top);
         int y = top - Math.round(sc);
         // заголовок
-        Render2D.textScaled(g, m.displayName(), x0 + PAD, y + 4, HEAD, t.text, false);
+        Render2D.textCrisp(g, m.displayName(), x0 + PAD, y + 4, HEAD, t.text, false);
         drawSwitch(g, t, x0 + w - PAD - 46, y + 2, m.isEnabled());
         hits.add(new Hit(x0 + w - PAD - 46, y, 46, 24, b -> m.toggle(), null, null, null));
         y += 30;
-        for (String line : wrap(m.description(), (int) (cw / SMALL))) { Render2D.textScaled(g, line, x0 + PAD, y, SMALL, t.textMuted, false); y += 13; }
+        for (String line : wrap(m.description(), (int) (cw / SMALL))) { Render2D.textCrisp(g, line, x0 + PAD, y, SMALL, t.textMuted, false); y += 13; }
         y += 8;
         g.fill(x0 + PAD, y, x0 + w - PAD, y + 1, t.border);
         y += 12;
@@ -295,8 +303,8 @@ public class NaoMenuScreen extends Screen {
     }
 
     private int label(GuiGraphics g, Theme t, Setting<?> s, int x, int y) {
-        Render2D.textScaled(g, s.name(), x, y + 6, TXT, t.text, false);
-        if (!s.description().isBlank()) Render2D.textScaled(g, s.description(), x, y + 21, SMALL, t.textMuted, false);
+        Render2D.textCrisp(g, s.name(), x, y + 6, TXT, t.text, false);
+        if (!s.description().isBlank()) Render2D.textCrisp(g, s.description(), x, y + 21, SMALL, t.textMuted, false);
         return s.description().isBlank() ? 30 : 42;
     }
 
@@ -308,10 +316,10 @@ public class NaoMenuScreen extends Screen {
     }
 
     private int drawNumber(GuiGraphics g, Theme t, NumberSetting n, int x, int y, int w) {
-        Render2D.textScaled(g, n.name(), x, y + 6, TXT, t.text, false);
-        Render2D.textScaled(g, n.format(), x + w - Render2D.width(n.format()) * TXT, y + 6, TXT, t.accent, false);
+        Render2D.textCrisp(g, n.name(), x, y + 6, TXT, t.text, false);
+        Render2D.textCrisp(g, n.format(), x + w - Render2D.width(n.format()) * TXT, y + 6, TXT, t.accent, false);
         int sy = y + (n.description().isBlank() ? 24 : 36), sw = w;
-        if (!n.description().isBlank()) Render2D.textScaled(g, n.description(), x, y + 21, SMALL, t.textMuted, false);
+        if (!n.description().isBlank()) Render2D.textCrisp(g, n.description(), x, y + 21, SMALL, t.textMuted, false);
         Render2D.roundedRect(g, x, sy, sw, 6, 3, t.border);
         int fw = Math.round((float) (sw * n.fraction()));
         Render2D.roundedRect(g, x, sy, Math.max(6, fw), 6, 3, t.accent);
@@ -379,11 +387,11 @@ public class NaoMenuScreen extends Screen {
             boolean sel = c.mode() == mode;
             int bw = (int) (Render2D.width(mode.title) * SMALL) + 16;
             Render2D.roundedRect(g, bx, by, bw, 20, 6, sel ? t.accent : t.panelAlt);
-            Render2D.textScaled(g, mode.title, bx + 8, by + 5, SMALL, sel ? 0xFFFFFFFF : t.text, false);
+            Render2D.textCrisp(g, mode.title, bx + 8, by + 5, SMALL, sel ? 0xFFFFFFFF : t.text, false);
             hits.add(new Hit(bx, by, bw, 20, b -> { c.setMode(mode); ConfigManager.markDirty(); }, null, null, null));
             by += 26;
         }
-        Render2D.textScaled(g, ColorUtil.hex(c.get()), bx, by + 6, SMALL, t.textMuted, false);
+        Render2D.textCrisp(g, ColorUtil.hex(c.get()), bx, by + 6, SMALL, t.textMuted, false);
         // пресеты
         int[] presets = {0xFFD97757, 0xFFE05A4F, 0xFFE8B84A, 0xFF5FB36A, 0xFF4FB3D9, 0xFF7E8ED8, 0xFFE88AA8, 0xFFFFFFFF, 0xFF2B2A28};
         int pxx = bx;
@@ -397,9 +405,9 @@ public class NaoMenuScreen extends Screen {
     }
 
     private int drawSelect(GuiGraphics g, Theme t, SelectSetting s, int x, int y, int w) {
-        Render2D.textScaled(g, s.name(), x, y + 6, TXT, t.text, false);
+        Render2D.textCrisp(g, s.name(), x, y + 6, TXT, t.text, false);
         int yy = y + 22;
-        if (!s.description().isBlank()) { Render2D.textScaled(g, s.description(), x, y + 21, SMALL, t.textMuted, false); yy += 14; }
+        if (!s.description().isBlank()) { Render2D.textCrisp(g, s.description(), x, y + 21, SMALL, t.textMuted, false); yy += 14; }
         int cx = x;
         for (String o : s.options()) {
             int cw = (int) (Render2D.width(o) * SMALL) + 18;
@@ -407,7 +415,7 @@ public class NaoMenuScreen extends Screen {
             boolean sel = s.is(o);
             Render2D.roundedRect(g, cx, yy, cw, 22, 7, sel ? t.accent : t.panel);
             if (!sel) Render2D.roundedOutline(g, cx, yy, cw, 22, 7, t.border);
-            Render2D.textScaled(g, o, cx + 9, yy + 6, SMALL, sel ? 0xFFFFFFFF : t.text, false);
+            Render2D.textCrisp(g, o, cx + 9, yy + 6, SMALL, sel ? 0xFFFFFFFF : t.text, false);
             final String opt = o;
             hits.add(new Hit(cx, yy, cw, 22, b -> { s.set(opt); ConfigManager.markDirty(); }, null, null, null));
             cx += cw + 6;
@@ -416,9 +424,9 @@ public class NaoMenuScreen extends Screen {
     }
 
     private int drawMultiSelect(GuiGraphics g, Theme t, MultiSelectSetting s, int x, int y, int w) {
-        Render2D.textScaled(g, s.name(), x, y + 6, TXT, t.text, false);
+        Render2D.textCrisp(g, s.name(), x, y + 6, TXT, t.text, false);
         int yy = y + 22;
-        if (!s.description().isBlank()) { Render2D.textScaled(g, s.description(), x, y + 21, SMALL, t.textMuted, false); yy += 14; }
+        if (!s.description().isBlank()) { Render2D.textCrisp(g, s.description(), x, y + 21, SMALL, t.textMuted, false); yy += 14; }
         int cx = x;
         for (String o : s.options()) {
             int cw = (int) (Render2D.width(o) * SMALL) + 18;
@@ -426,7 +434,7 @@ public class NaoMenuScreen extends Screen {
             boolean sel = s.has(o);
             Render2D.roundedRect(g, cx, yy, cw, 22, 7, sel ? t.accentSoft : t.panel);
             Render2D.roundedOutline(g, cx, yy, cw, 22, 7, sel ? t.accent : t.border);
-            Render2D.textScaled(g, o, cx + 9, yy + 6, SMALL, t.text, false);
+            Render2D.textCrisp(g, o, cx + 9, yy + 6, SMALL, t.text, false);
             final String opt = o;
             hits.add(new Hit(cx, yy, cw, 22, b -> { s.toggle(opt); ConfigManager.markDirty(); }, null, null, null));
             cx += cw + 6;
@@ -441,7 +449,7 @@ public class NaoMenuScreen extends Screen {
         int bw = (int) (Render2D.width(txt) * SMALL) + 20;
         Render2D.roundedRect(g, x + w - bw, y + 4, bw, 22, 7, waiting ? t.accent : t.panel);
         Render2D.roundedOutline(g, x + w - bw, y + 4, bw, 22, 7, waiting ? t.accent : t.border);
-        Render2D.textScaled(g, txt, x + w - bw + 10, y + 10, SMALL, waiting ? 0xFFFFFFFF : t.text, false);
+        Render2D.textCrisp(g, txt, x + w - bw + 10, y + 10, SMALL, waiting ? 0xFFFFFFFF : t.text, false);
         hits.add(new Hit(x + w - bw, y + 4, bw, 22, b -> {
             if (b == GLFW.GLFW_MOUSE_BUTTON_RIGHT) { k.set(KeybindSetting.NONE); ConfigManager.markDirty(); binding = null; }
             else { binding = k; focused = null; }
@@ -450,9 +458,9 @@ public class NaoMenuScreen extends Screen {
     }
 
     private int drawText(GuiGraphics g, Theme t, TextSetting s, int x, int y, int w) {
-        Render2D.textScaled(g, s.name(), x, y + 6, TXT, t.text, false);
+        Render2D.textCrisp(g, s.name(), x, y + 6, TXT, t.text, false);
         int yy = y + 22;
-        if (!s.description().isBlank()) { Render2D.textScaled(g, s.description(), x, y + 21, SMALL, t.textMuted, false); yy += 14; }
+        if (!s.description().isBlank()) { Render2D.textCrisp(g, s.description(), x, y + 21, SMALL, t.textMuted, false); yy += 14; }
         TextField f = fieldFor(s);
         drawTextField(g, t, f, x, yy, w, 28, "");
         return yy + 36;
@@ -460,8 +468,8 @@ public class NaoMenuScreen extends Screen {
 
     private int drawGroup(GuiGraphics g, Theme t, GroupSetting gr, int x, int y, int w) {
         Render2D.roundedRect(g, x, y, w, 30, 8, t.panel);
-        Render2D.textScaled(g, (gr.expanded() ? "▾  " : "▸  ") + gr.name(), x + 10, y + 9, TXT, t.text, false);
-        if (!gr.description().isBlank()) Render2D.textScaled(g, gr.description(), x + w - Render2D.width(gr.description()) * SMALL - 10, y + 10, SMALL, t.textMuted, false);
+        Render2D.textCrisp(g, (gr.expanded() ? "▾  " : "▸  ") + gr.name(), x + 10, y + 9, TXT, t.text, false);
+        if (!gr.description().isBlank()) Render2D.textCrisp(g, gr.description(), x + w - Render2D.width(gr.description()) * SMALL - 10, y + 10, SMALL, t.textMuted, false);
         hits.add(new Hit(x, y, w, 30, b -> gr.toggleExpanded(), null, null, null));
         y += 36;
         if (!gr.expanded()) return y;
@@ -472,12 +480,12 @@ public class NaoMenuScreen extends Screen {
     }
 
     private int drawButtonRow(GuiGraphics g, Theme t, String label, String button, int x, int y, int w, Runnable action) {
-        Render2D.textScaled(g, label, x, y + 6, TXT, t.text, false);
+        Render2D.textCrisp(g, label, x, y + 6, TXT, t.text, false);
         int bw = (int) (Render2D.width(button) * SMALL) + 20;
         boolean hover = hover(x + w - bw, y + 2, bw, 24);
         Render2D.roundedRect(g, x + w - bw, y + 2, bw, 24, 7, hover ? t.accent : t.panel);
         Render2D.roundedOutline(g, x + w - bw, y + 2, bw, 24, 7, hover ? t.accent : t.border);
-        Render2D.textScaled(g, button, x + w - bw + 10, y + 9, SMALL, hover ? 0xFFFFFFFF : t.text, false);
+        Render2D.textCrisp(g, button, x + w - bw + 10, y + 9, SMALL, hover ? 0xFFFFFFFF : t.text, false);
         hits.add(new Hit(x + w - bw, y + 2, bw, 24, b -> action.run(), null, null, null));
         return y + 32;
     }
@@ -485,19 +493,19 @@ public class NaoMenuScreen extends Screen {
     // --- друзья / профили ------------------------------------------------------------------------------
     private void drawFriends(GuiGraphics g, Theme t) {
         int x0 = SIDEBAR_W + 1 + PAD * 2, w = DESIGN_W - x0 - PAD * 2;
-        Render2D.textScaled(g, "Друзья", x0, PAD + 4, HEAD, t.text, false);
-        Render2D.textScaled(g, "Друзья подсвечиваются отдельным цветом в HUD и визуалах. Ник без учёта регистра.", x0, PAD + 30, SMALL, t.textMuted, false);
+        Render2D.textCrisp(g, "Друзья", x0, PAD + 4, HEAD, t.text, false);
+        Render2D.textCrisp(g, "Друзья подсвечиваются отдельным цветом в HUD и визуалах. Ник без учёта регистра.", x0, PAD + 30, SMALL, t.textMuted, false);
         drawTextField(g, t, friendField, x0, PAD + 54, w - 120, 30, "Ник игрока");
         boolean hover = hover(x0 + w - 110, PAD + 54, 110, 30);
         Render2D.roundedRect(g, x0 + w - 110, PAD + 54, 110, 30, 8, hover ? ColorUtil.darker(t.accent, 0.9f) : t.accent);
-        Render2D.textScaled(g, "Добавить", x0 + w - 110 + 55 - Render2D.width("Добавить") * TXT / 2f, PAD + 63, TXT, 0xFFFFFFFF, false);
+        Render2D.textCrisp(g, "Добавить", x0 + w - 110 + 55 - Render2D.width("Добавить") * TXT / 2f, PAD + 63, TXT, 0xFFFFFFFF, false);
         hits.add(new Hit(x0 + w - 110, PAD + 54, 110, 30, b -> addFriend(), null, null, null));
         int y = PAD + 100;
         List<String> names = new ArrayList<>(Friends.all());
         if (minecraft.getConnection() != null) {
             // онлайн-игроки, которых можно добавить одним кликом
             int cx = x0; int yy = y;
-            Render2D.textScaled(g, "Сейчас на сервере:", x0, yy, SMALL, t.textMuted, false);
+            Render2D.textCrisp(g, "Сейчас на сервере:", x0, yy, SMALL, t.textMuted, false);
             yy += 16;
             for (var info : minecraft.getConnection().getOnlinePlayers()) {
                 String n = info.getProfile().name();
@@ -507,19 +515,19 @@ public class NaoMenuScreen extends Screen {
                 boolean f = Friends.contains(n);
                 Render2D.roundedRect(g, cx, yy, cw, 22, 7, f ? t.accentSoft : t.panel);
                 Render2D.roundedOutline(g, cx, yy, cw, 22, 7, f ? t.accent : t.border);
-                Render2D.textScaled(g, n, cx + 9, yy + 6, SMALL, t.text, false);
+                Render2D.textCrisp(g, n, cx + 9, yy + 6, SMALL, t.text, false);
                 hits.add(new Hit(cx, yy, cw, 22, b -> Friends.toggle(n), null, null, null));
                 cx += cw + 6;
             }
             y = yy + 40;
         }
-        if (names.isEmpty()) Render2D.textScaled(g, "Список пуст", x0, y, TXT, t.textMuted, false);
+        if (names.isEmpty()) Render2D.textCrisp(g, "Список пуст", x0, y, TXT, t.textMuted, false);
         for (String n : names) {
             Render2D.roundedRect(g, x0, y, w, 36, 9, t.panel);
-            Render2D.textScaled(g, n, x0 + 14, y + 11, TXT, t.text, false);
+            Render2D.textCrisp(g, n, x0 + 14, y + 11, TXT, t.text, false);
             boolean h = hover(x0 + w - 90, y + 6, 80, 24);
             Render2D.roundedRect(g, x0 + w - 90, y + 6, 80, 24, 7, h ? t.danger : t.panelAlt);
-            Render2D.textScaled(g, "Удалить", x0 + w - 90 + 40 - Render2D.width("Удалить") * SMALL / 2f, y + 13, SMALL, h ? 0xFFFFFFFF : t.text, false);
+            Render2D.textCrisp(g, "Удалить", x0 + w - 90 + 40 - Render2D.width("Удалить") * SMALL / 2f, y + 13, SMALL, h ? 0xFFFFFFFF : t.text, false);
             hits.add(new Hit(x0 + w - 90, y + 6, 80, 24, b -> Friends.remove(n), null, null, null));
             y += 42;
         }
@@ -531,8 +539,8 @@ public class NaoMenuScreen extends Screen {
 
     private void drawProfiles(GuiGraphics g, Theme t) {
         int x0 = SIDEBAR_W + 1 + PAD * 2, w = DESIGN_W - x0 - PAD * 2;
-        Render2D.textScaled(g, "Профили", x0, PAD + 4, HEAD, t.text, false);
-        Render2D.textScaled(g, "Файлы config/naovisual/profiles/<имя>.json. Текущий: " + ConfigManager.profile(), x0, PAD + 30, SMALL, t.textMuted, false);
+        Render2D.textCrisp(g, "Профили", x0, PAD + 4, HEAD, t.text, false);
+        Render2D.textCrisp(g, "Файлы config/naovisual/profiles/<имя>.json. Текущий: " + ConfigManager.profile(), x0, PAD + 30, SMALL, t.textMuted, false);
         drawTextField(g, t, profileField, x0, PAD + 54, w - 250, 30, "Имя нового профиля");
         button(g, t, "Создать", x0 + w - 240, PAD + 54, 115, 30, true, () -> {
             if (!profileField.text.isBlank()) { ConfigManager.saveAs(profileField.text); profileField.text = ""; }
@@ -543,12 +551,12 @@ public class NaoMenuScreen extends Screen {
             boolean cur = p.equals(ConfigManager.profile());
             Render2D.roundedRect(g, x0, y, w, 36, 9, t.panel);
             if (cur) Render2D.roundedOutline(g, x0, y, w, 36, 9, t.accent);
-            Render2D.textScaled(g, p + (cur ? "  •  активен" : ""), x0 + 14, y + 11, TXT, t.text, false);
+            Render2D.textCrisp(g, p + (cur ? "  •  активен" : ""), x0 + 14, y + 11, TXT, t.text, false);
             if (!cur) {
                 button(g, t, "Загрузить", x0 + w - 190, y + 6, 90, 24, true, () -> ConfigManager.loadProfile(p));
                 boolean h = hover(x0 + w - 90, y + 6, 80, 24);
                 Render2D.roundedRect(g, x0 + w - 90, y + 6, 80, 24, 7, h ? t.danger : t.panelAlt);
-                Render2D.textScaled(g, "Удалить", x0 + w - 90 + 40 - Render2D.width("Удалить") * SMALL / 2f, y + 13, SMALL, h ? 0xFFFFFFFF : t.text, false);
+                Render2D.textCrisp(g, "Удалить", x0 + w - 90 + 40 - Render2D.width("Удалить") * SMALL / 2f, y + 13, SMALL, h ? 0xFFFFFFFF : t.text, false);
                 hits.add(new Hit(x0 + w - 90, y + 6, 80, 24, b -> ConfigManager.deleteProfile(p), null, null, null));
             }
             y += 42;
@@ -560,7 +568,7 @@ public class NaoMenuScreen extends Screen {
         int bg = primary ? (hover ? ColorUtil.darker(t.accent, 0.9f) : t.accent) : (hover ? t.panelAlt : t.panel);
         Render2D.roundedRect(g, x, y, w, h, 8, bg);
         if (!primary) Render2D.roundedOutline(g, x, y, w, h, 8, t.border);
-        Render2D.textScaled(g, label, x + w / 2f - Render2D.width(label) * SMALL / 2f, y + h / 2f - 5, SMALL, primary ? 0xFFFFFFFF : t.text, false);
+        Render2D.textCrisp(g, label, x + w / 2f - Render2D.width(label) * SMALL / 2f, y + h / 2f - 5, SMALL, primary ? 0xFFFFFFFF : t.text, false);
         hits.add(new Hit(x, y, w, h, b -> action.run(), null, null, null));
     }
 
@@ -587,7 +595,7 @@ public class NaoMenuScreen extends Screen {
         Render2D.roundedOutline(g, x, y, w, h, 8, foc ? t.accent : t.border);
         String shown = f.text.isEmpty() && !foc ? placeholder : f.text;
         boolean blink = foc && (System.currentTimeMillis() / 500) % 2 == 0;
-        Render2D.textScaled(g, shown + (blink ? "_" : ""), x + 10, y + h / 2f - 5, SMALL, f.text.isEmpty() && !foc ? t.textMuted : t.text, false);
+        Render2D.textCrisp(g, shown + (blink ? "_" : ""), x + 10, y + h / 2f - 5, SMALL, f.text.isEmpty() && !foc ? t.textMuted : t.text, false);
         hits.add(new Hit(x, y, w, h, b -> { focused = f; binding = null; }, null, null, null));
     }
 

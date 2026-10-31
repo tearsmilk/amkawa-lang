@@ -82,11 +82,11 @@ class UtilTest {
 
     @Test
     void themes() {
-        assertSame(Theme.CLAUDE, Theme.byName("нет такой"));
+        assertSame(Theme.BLACK, Theme.byName("нет такой"));
         assertEquals("Ночь", Theme.byName("Ночь").name());
         Theme t = Theme.CLAUDE.withAccent(0xFF112233);
         assertEquals(0xFF112233, t.accent);
         assertEquals(0x112233, t.accentSoft & 0xFFFFFF);
-        assertEquals(5, Theme.ALL.size());
+        assertEquals(6, Theme.ALL.size());
     }
 }

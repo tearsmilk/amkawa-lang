@@ -106,6 +106,26 @@ public final class Render2D {
         g.pose().popMatrix();
     }
 
+    /** Текст без размытия внутри масштабированной матрицы: точка переводится в экранные пиксели и округляется, а шрифт
+     *  рисуется с чистым масштабом (кратным 0,5, не меньше 1), чтобы глифы ложились на пиксели. */
+    public static void textCrisp(GuiGraphics g, String s, float x, float y, float scale, int color, boolean shadow) {
+        var pose = g.pose();
+        float m = pose.m00();
+        float e = crispScale(scale * m);
+        org.joml.Vector2f p = pose.transformPosition(new org.joml.Vector2f(x, y));
+        pose.pushMatrix();
+        pose.identity();
+        pose.translate(Math.round(p.x), Math.round(p.y));
+        pose.scale(e, e);
+        g.drawString(font(), s, 0, 0, color, shadow);
+        pose.popMatrix();
+    }
+
+    /** Ближайший «чистый» масштаб шрифта: кратный 0,5 и не меньше 1. */
+    public static float crispScale(float effective) {
+        return Math.max(1f, Math.round(effective * 2f) / 2f);
+    }
+
     public static int width(String s) { return font().width(s); }
     public static int lineHeight() { return font().lineHeight; }
 
