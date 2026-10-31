@@ -90,13 +90,20 @@ public class NaoMenuScreen extends Screen {
     public float menuScale() { return scale; }
 
     // --- отрисовка ----------------------------------------------------------------------------------
+    // Ваниль размывает фон один раз за кадр внутри renderBackground (второй вызов blurBeforeThisStratum —
+    // IllegalStateException «Can only blur once per frame»), поэтому размытие только здесь, без градиента ванили.
+    @Override
+    public void renderBackground(GuiGraphics g, int mx, int my, float partial) {
+        ThemeModule theme = ModuleRegistry.get(ThemeModule.class);
+        if (theme.blur() && minecraft.level != null) g.blurBeforeThisStratum();
+    }
+
     @Override
     public void render(GuiGraphics g, int mx, int my, float partial) {
         Theme t = ThemeManager.current();
         ThemeModule theme = ModuleRegistry.get(ThemeModule.class);
         float a = open.get();
         if (closing && a < 0.02f) { minecraft.setScreen(parent); return; }
-        if (theme.blur()) g.blurBeforeThisStratum();
         g.fill(0, 0, width, height, ColorUtil.argb(Math.round(theme.dim() * a), 0, 0, 0));
 
         hits.clear();
