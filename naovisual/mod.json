@@ -1,0 +1,7 @@
+{
+  "id": "naovisual",
+  "version": "${version}",
+  "mc_versions": ["1.21.11"],
+  "loaders": ["fabric", "quilt"],
+  "requires": [{"modrinth": "fabric-api"}]
+}

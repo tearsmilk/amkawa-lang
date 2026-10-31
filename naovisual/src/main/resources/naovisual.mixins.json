@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "milk.naovisual.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "AtmosphericFogEnvironmentMixin",
+    "BossHealthOverlayAccessor",
+    "ChatComponentMixin",
+    "ClientLevelDataMixin",
+    "EndCrystalRendererMixin",
+    "FogRendererMixin",
+    "GameRendererAccessor",
+    "GameRendererMixin",
+    "ItemInHandRendererMixin",
+    "LightTextureMixin",
+    "LivingEntityMixin",
+    "ScreenEffectRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

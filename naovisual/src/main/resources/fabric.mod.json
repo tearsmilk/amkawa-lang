@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "naovisual",
+  "version": "${version}",
+  "name": "NaoVisual",
+  "description": "Клиентские визуалы для Minecraft: HUD-модули, подсветка целей, частицы, частички удара, туман, яркость, Discord RPC. Меню — правый Shift.",
+  "authors": ["tearsmilk"],
+  "contact": {
+    "sources": "https://github.com/tearsmilk/amkawa-lang",
+    "homepage": "https://mc-ru.org"
+  },
+  "license": "MIT",
+  "icon": "assets/naovisual/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["milk.naovisual.NaoVisualClient"]
+  },
+  "mixins": ["naovisual.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.18.5",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
