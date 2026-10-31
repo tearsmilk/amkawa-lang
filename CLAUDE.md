@@ -15,6 +15,10 @@
   compact instance card, live Modrinth and CurseForge catalogs (`.mrpack` / CurseForge zip install, sha1-checked mod downloads;
   CurseForge needs an API key from console.curseforge.com in settings), own instances, offline accounts, settings with «Оформление» — accent, window background, glass, side bar
   left / right / folded; `eta/launch.py` downloads Minecraft, Mojang's Java runtime, Fabric / Quilt / Forge / NeoForge and runs the game; accounts: offline, mc-ru.org, Microsoft). All target macOS 11+ Intel x64 and are built into `.dmg` by `.github/workflows/*-macos.yml` (self-test included); Эта is also built into a single Windows x64 `Eta.exe` by `.github/workflows/eta-windows.yml` (`eta/packaging/Eta-windows.spec`, `build_windows.ps1`).
+  `naovisual/` — NaoVisual, client Fabric visuals mod for Minecraft 1.21.11 (Java 21, package `milk.naovisual`, Mojang mappings,
+  Gradle wrapper, JUnit 5; HUD / visuals / particles / world / other / client modules, menu on Right Shift drawn in a 966×699 grid,
+  draggable HUD editor, JSON profiles in `config/naovisual/`, themes, own Discord IPC; built by `.github/workflows/naovisual-mod.yml`,
+  releases `naovisual-v*`; written from scratch — never copy code or assets from other visual mods).
   `rurukasuka/` — rurukaSuka, client Fabric cosmetics mod for Minecraft 1.21.11 (wardrobe, руры, friends; talks to mc-ru.org,
   Mojang mappings, Gradle wrapper, built by `.github/workflows/rurukasuka-mod.yml`, releases `rurukasuka-v*`); Эта installs it into
   Fabric/Quilt instances as a system mod and hands over the mc-ru.org session via `config/rurukasuka_launcher.json`.
