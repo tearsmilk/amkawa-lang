@@ -52,14 +52,17 @@ public final class Render3D {
     public static VertexConsumer lines(MultiBufferSource src) { return src.getBuffer(RenderTypes.lines()); }
     public static VertexConsumer quads(MultiBufferSource src) { return src.getBuffer(RenderTypes.debugQuads()); }
 
+    public static final float LINE_WIDTH = 2.0f;
+
     public static void line(PoseStack ps, VertexConsumer vc, double x1, double y1, double z1, double x2, double y2, double z2, int color) {
         PoseStack.Pose pose = ps.last();
         float dx = (float) (x2 - x1), dy = (float) (y2 - y1), dz = (float) (z2 - z1);
         float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (len < 1e-6f) return;
         dx /= len; dy /= len; dz /= len;
-        vc.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(color).setNormal(pose, dx, dy, dz);
-        vc.addVertex(pose, (float) x2, (float) y2, (float) z2).setColor(color).setNormal(pose, dx, dy, dz);
+        // формат линий 1.21.11 содержит LineWidth; без него ImmediatelyFast падает («Missing elements in vertex»)
+        vc.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(color).setNormal(pose, dx, dy, dz).setLineWidth(LINE_WIDTH);
+        vc.addVertex(pose, (float) x2, (float) y2, (float) z2).setColor(color).setNormal(pose, dx, dy, dz).setLineWidth(LINE_WIDTH);
     }
 
     public static void lineBox(PoseStack ps, VertexConsumer vc, AABB box, int color) {
