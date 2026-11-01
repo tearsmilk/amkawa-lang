@@ -1,0 +1,236 @@
+"""HTTP for the game: JSON / bytes with a proper User-Agent and certifi's CA bundle (python.org builds have no
+system certificates), a thread pool that hands results back to the Qt thread, and an icon cache on disk."""
+import hashlib
+import json
+import ssl
+import urllib.error
+import urllib.parse
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QPixmap
+
+from . import __version__
+from .paths import data_dir
+
+USER_AGENT = f"tearsmilk/theta/{__version__} (github.com/tearsmilk/amkawa-lang)"
+
+
+def _context():
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+_CTX = _context()
+
+
+class NetError(Exception):
+    pass
+
+
+def get_bytes(url, timeout=20, params=None, headers=None):
+    if params:
+        url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
+    hdrs = {"User-Agent": USER_AGENT, "Accept": "application/json, */*"}
+    hdrs.update(headers or {})
+    req = urllib.request.Request(url, headers=hdrs)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_CTX) as r:
+            return r.read()
+    except Exception as e:  # noqa: BLE001
+        raise NetError(_explain(e)) from e
+
+
+def get_json(url, timeout=20, params=None, headers=None):
+    return json.loads(get_bytes(url, timeout, params, headers).decode("utf-8"))
+
+
+def post_json(url, payload, timeout=20, headers=None):
+    """POST JSON → parsed JSON (None for an empty 204). A 4xx/5xx with a JSON body raises NetError with the
+    server's errorMessage (Yggdrasil style) so the user sees «Неверный пароль» instead of «HTTP Error 403»."""
+    body = json.dumps(payload).encode("utf-8")
+    hdrs = {"User-Agent": USER_AGENT, "Accept": "application/json", "Content-Type": "application/json"}
+    hdrs.update(headers or {})
+    req = urllib.request.Request(url, data=body, method="POST", headers=hdrs)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_CTX) as r:
+            raw = r.read()
+    except urllib.error.HTTPError as e:
+        try:
+            info = json.loads(e.read().decode("utf-8"))
+            msg = info.get("errorMessage") or info.get("error") or info.get("detail")
+        except Exception:  # noqa: BLE001
+            msg = None
+        err = NetError(msg or _explain(e))
+        err.status = e.code
+        raise err from e
+    except Exception as e:  # noqa: BLE001
+        raise NetError(_explain(e)) from e
+    return json.loads(raw.decode("utf-8")) if raw.strip() else None
+
+
+def call_json(method, url, payload=None, form=None, headers=None, timeout=20):
+    """Any method → (status, parsed JSON or None). HTTP errors are *returned*, not raised, so callers can read
+    the body (OAuth `error`, Xbox `XErr`); only network failures raise NetError."""
+    hdrs = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    body = None
+    if form is not None:
+        body = urllib.parse.urlencode(form).encode("utf-8")
+        hdrs["Content-Type"] = "application/x-www-form-urlencoded"
+    elif payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+        hdrs["Content-Type"] = "application/json"
+    hdrs.update(headers or {})
+    req = urllib.request.Request(url, data=body, method=method, headers=hdrs)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_CTX) as r:
+            status, raw = r.status, r.read()
+    except urllib.error.HTTPError as e:
+        status, raw = e.code, e.read()
+    except Exception as e:  # noqa: BLE001
+        raise NetError(_explain(e)) from e
+    try:
+        data = json.loads(raw.decode("utf-8")) if raw.strip() else None
+    except ValueError:
+        data = None
+    return status, data
+
+
+def post_form(url, data, timeout=20):
+    """POST application/x-www-form-urlencoded → (status, json); 4xx is returned, not raised."""
+    return call_json("POST", url, form=data, timeout=timeout)
+
+
+def download(url, dest, timeout=60, progress=None, cancel=None, chunk=1 << 16, headers=None):
+    """Stream url → dest (via a .part file). progress(done_bytes, total_bytes); cancel() → True aborts."""
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".part")
+    hdrs = {"User-Agent": USER_AGENT}
+    hdrs.update(headers or {})
+    req = urllib.request.Request(url, headers=hdrs)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_CTX) as r, open(tmp, "wb") as fh:
+            total = int(r.headers.get("Content-Length") or 0)
+            done = 0
+            while True:
+                if cancel and cancel():
+                    raise NetError("Отменено")
+                buf = r.read(chunk)
+                if not buf:
+                    break
+                fh.write(buf)
+                done += len(buf)
+                if progress:
+                    progress(done, total)
+            if total and done != total:
+                raise NetError(f"Загрузка оборвалась ({done} из {total} байт)")
+        tmp.replace(dest)
+        return dest
+    except NetError:
+        tmp.unlink(missing_ok=True)
+        raise
+    except Exception as e:  # noqa: BLE001
+        tmp.unlink(missing_ok=True)
+        raise NetError(_explain(e)) from e
+
+
+def _explain(e):
+    text = str(e)
+    if "CERTIFICATE" in text.upper():
+        return "Не удалось проверить сертификат сайта"
+    if "timed out" in text.lower():
+        return "Сервер не ответил вовремя"
+    if "Name or service not known" in text or "nodename nor servname" in text or "getaddrinfo" in text:
+        return "Нет подключения к интернету"
+    if "HTTP Error 404" in text:
+        return "Не найдено (404)"
+    if "HTTP Error 429" in text:
+        return "Слишком много запросов — подождите минуту"
+    return text
+
+
+class Runner(QObject):
+    """run(fn, callback, errback): fn in a worker thread, callbacks in the Qt thread."""
+
+    _done = Signal(object, object, object)
+
+    def __init__(self, workers=6):
+        super().__init__()
+        self.pool = ThreadPoolExecutor(max_workers=workers)
+        self._done.connect(self._deliver)
+
+    def run(self, fn, callback=None, errback=None):
+        def job():
+            try:
+                res, err = fn(), None
+            except Exception as e:  # noqa: BLE001
+                res, err = None, e
+            self._done.emit(callback if err is None else errback, res if err is None else err, None)
+
+        return self.pool.submit(job)
+
+    def _deliver(self, cb, value, _):
+        if cb is not None:
+            try:
+                cb(value)
+            except RuntimeError:   # the widget waiting for it is gone
+                pass
+
+
+class IconCache(QObject):
+    """Images: memory → disk (<data>/cache/icons) → network."""
+
+    def __init__(self, runner):
+        super().__init__()
+        self.runner = runner
+        self.mem = {}
+        self.waiting = {}
+        self.folder = data_dir() / "cache" / "icons"
+        self.folder.mkdir(parents=True, exist_ok=True)
+
+    def path(self, url):
+        ext = Path(urllib.parse.urlparse(url).path).suffix or ".img"
+        return self.folder / (hashlib.sha1(url.encode()).hexdigest()[:20] + ext)
+
+    def get(self, url, callback):
+        """callback(QPixmap) now (cached) or later; returns the pixmap if it was cached."""
+        if not url:
+            return None
+        if url in self.mem:
+            callback(self.mem[url])
+            return self.mem[url]
+        p = self.path(url)
+        if p.exists():
+            pix = QPixmap(str(p))
+            if not pix.isNull():
+                self.mem[url] = pix
+                callback(pix)
+                return pix
+        if url in self.waiting:
+            self.waiting[url].append(callback)
+            return None
+        self.waiting[url] = [callback]
+
+        def fetch():
+            data = get_bytes(url, timeout=20)
+            p.write_bytes(data)
+            return url
+
+        def done(u):
+            pix = QPixmap(str(p))
+            self.mem[u] = pix
+            for cb in self.waiting.pop(u, []):
+                try:
+                    cb(pix)
+                except RuntimeError:
+                    pass
+
+        self.runner.run(fetch, done, lambda e: self.waiting.pop(url, None))
+        return None

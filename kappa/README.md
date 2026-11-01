@@ -1,0 +1,61 @@
+# Каппа · κ
+
+<img src="assets/icon.png" width="96" align="right">
+
+
+Аниме-войсчейнджер в реальном времени для **macOS 11 Big Sur+ (Intel x64)**.
+Интерфейс в стиле Claude, минимум анимаций. Раньше называлась *Amkawa Voice*
+(модели и настройки переносятся автоматически).
+
+- Берёт голос с выбранного микрофона и превращает его в женский аниме-голос.
+- Вывод в **виртуальный микрофон «Kappa Mic»** — его можно выбрать в Discord как устройство ввода.
+- **Слушать себя** — вывод ещё и в наушники, с отдельной громкостью.
+- **Много голосов** с выбором в боковой панели:
+  - 8 встроенных (Kawaii, Tsundere, Onee-san, Genki, Kuudere, Idol, Chibi, Yandere) — без интернета,
+    задержка ~60 мс, лёгкие для процессора. Высота, тембр (форманты), яркость, придыхание настраиваются.
+  - Любые **RVC v1/v2** модели (`.pth`, `.zip` или ссылка на Hugging Face) — нейросеть, звучит естественнее,
+    но на Intel CPU задержка ~0.6–1 с.
+- **Текст в голос**: пишете текст — его произносит синтезатор macOS (`say`, по-русски Milena),
+  а выбранная модель переозвучивает. Звук идёт туда же, куда и голос с микрофона.
+- Шумодав, усиление, индикаторы уровня, светлая/тёмная тема.
+
+## Скачать / собрать
+
+**Без Mac** (так собран готовый dmg): `python3 packaging/build_dmg_portable.py --dmg-tool <libdmg-hfsplus/dmg>` —
+собирает .app из готового portable-Python для macOS x86_64 и macOS-колёс зависимостей, ничего не компилируя,
+проверяет, что все бинарники x86_64 и требуют macOS ≤ 11.0, и упаковывает в .dmg (нужны xorriso, Pillow, macholib).
+Виртуальный микрофон в такой сборке — официальный подписанный BlackHole 2ch.
+
+**На Mac / в GitHub Actions** (включите Actions в настройках репозитория):
+
+Готовый `.dmg` собирается в GitHub Actions (workflow *Каппа — Kappa (macOS Intel .dmg)*) на Intel-раннере macOS.
+Скачать: вкладка **Actions** → последний успешный запуск → артефакт `Kappa-macOS-x64`.
+Для релиза поставьте тег `kappa-v1.0.0` — dmg появится в **Releases**.
+
+Установка и настройка Discord — в [`packaging/README-dmg.txt`](packaging/README-dmg.txt) (этот же файл лежит в dmg).
+
+## Где брать RVC-модели
+
+Ищите на Hugging Face: «RVC v2 female», «RVC anime». Например, коллекции
+[reddrumm/RVCModels](https://huggingface.co/reddrumm/RVCModels),
+[TASTomusan/RVC_Models_Collection_Series](https://huggingface.co/TASTomusan/RVC_Models_Collection_Series).
+Вставьте ссылку на репозиторий или на файл в окне «Добавить RVC-модель». Большинство таких моделей —
+фанатские копии голосов персонажей/актёров: смотрите лицензию и не выдавайте себя за реальных людей.
+
+## Как устроено
+
+| Файл | Что делает |
+|---|---|
+| `kappa/engine.py` | аудио-потоки (sounddevice/CoreAudio): микрофон → голос → виртуальный микрофон + наушники |
+| `kappa/voices/dsp.py` | встроенные голоса: фазовый вокодер со сдвигом высоты и формант |
+| `kappa/voices/rvc.py` | RVC в реальном времени (ContentVec + YIN-питч + синтезатор RVC + SOLA) |
+| `kappa/voices/hubert.py` | компактный ContentVec/HuBERT без fairseq/transformers |
+| `kappa/virtual_mic.py` | установка драйвера «Kappa Mic» (BlackHole, переименованный при сборке) |
+| `kappa/tts.py` | текст в голос: синтез через `say`, переозвучка выбранной моделью |
+| `kappa/ui.py`, `theme.py` | интерфейс (PySide6) |
+| `packaging/` | PyInstaller, сборка драйвера, проверка совместимости с macOS 11, dmg |
+
+Запуск из исходников: `pip install -r requirements.txt && python run.py`.
+Сборка на Intel Mac: `pip install -r requirements-build.txt && packaging/build_macos.sh`.
+
+Лицензии: BlackHole — GPL-3.0, код RVC (`voices/rvc_pack`) — MIT.
