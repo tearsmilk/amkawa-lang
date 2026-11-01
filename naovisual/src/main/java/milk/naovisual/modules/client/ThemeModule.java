@@ -11,7 +11,7 @@ import milk.naovisual.core.theme.ThemeManager;
 
 /** Тема интерфейса: палитра, свой акцент, размытие и затемнение за меню. */
 public class ThemeModule extends Module {
-    private final SelectSetting theme = add(new SelectSetting("Тема", "", "Чёрная 75 %", Theme.ALL.stream().map(Theme::name).toArray(String[]::new)).onChange(v -> refresh()));
+    private final SelectSetting theme = add(new SelectSetting("Тема", "", Theme.BLACK.name(), Theme.ALL.stream().map(Theme::name).toArray(String[]::new)).onChange(v -> refresh()));
     private final BooleanSetting customAccent = add(new BooleanSetting("Свой акцент", "", false).onChange(v -> refresh()));
     private final ColorSetting accent = add(new ColorSetting("Акцент", "", 0xFFD97757, false).visibleWhen(customAccent::on).onChange(v -> refresh()));
     private final NumberSetting opacity = add(new NumberSetting("Прозрачность меню", "Непрозрачность панелей меню, %", 75, 10, 100, 5).onChange(v -> refresh()));
