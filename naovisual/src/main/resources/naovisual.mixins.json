@@ -12,6 +12,8 @@
     "FogRendererMixin",
     "GameRendererAccessor",
     "GameRendererMixin",
+    "ItemEntityRendererMixin",
+    "ItemEntityRenderStateMixin",
     "ItemInHandRendererMixin",
     "LightTextureMixin",
     "LivingEntityMixin",

@@ -16,40 +16,49 @@ public final class Render2D {
         g.fill(x, y, x + w, y + h, color);
     }
 
-    /** Скруглённый прямоугольник: центр + ступенчатые углы по окружности. */
+    /** Размер одной единицы текущей матрицы в пикселях экрана. */
+    private static float pxScale(GuiGraphics g) {
+        float m = Math.abs(g.pose().m00());
+        return m < 0.01f ? 1f : m * (float) Minecraft.getInstance().getWindow().getGuiScale();
+    }
+
+    private static int px(GuiGraphics g, float units) { return Math.max(1, Math.round(units * pxScale(g))); }
+
+    /** Четверть текстуры (2·n × 2·n) в прямоугольник (x, y, s, s). qx/qy — 0 или 1 (левая/правая, верх/низ). */
+    private static void quarter(GuiGraphics g, net.minecraft.resources.Identifier tex, int x, int y, int s, int n, int qx, int qy, int color) {
+        g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, tex, x, y, qx * n, qy * n, s, s, n, n, n * 2, n * 2, color);
+    }
+
+    /** Скруглённый прямоугольник со сглаженными углами: крест из заливок + четыре угла-текстуры, без щелей. */
     public static void roundedRect(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
         if (w <= 0 || h <= 0 || ColorUtil.alpha(color) == 0) return;
         int r = Math.max(0, Math.min(radius, Math.min(w, h) / 2));
         if (r == 0) { g.fill(x, y, x + w, y + h, color); return; }
-        g.fill(x, y + r, x + w, y + h - r, color);
-        for (int i = 0; i < r; i++) {
-            // горизонтальная полоса на расстоянии i от края: ширина выреза по окружности
-            double dy = r - i - 0.5;
-            int cut = r - (int) Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
-            g.fill(x + cut, y + i, x + w - cut, y + i + 1, color);
-            g.fill(x + cut, y + h - i - 1, x + w - cut, y + h - i, color);
-        }
+        g.fill(x + r, y, x + w - r, y + h, color);
+        g.fill(x, y + r, x + r, y + h - r, color);
+        g.fill(x + w - r, y + r, x + w, y + h - r, color);
+        int n = px(g, r);
+        var tex = Shapes.disk(n);
+        quarter(g, tex, x, y, r, n, 0, 0, color);
+        quarter(g, tex, x + w - r, y, r, n, 1, 0, color);
+        quarter(g, tex, x, y + h - r, r, n, 0, 1, color);
+        quarter(g, tex, x + w - r, y + h - r, r, n, 1, 1, color);
     }
 
+    /** Тонкая сглаженная обводка (1 единица) того же скругления. */
     public static void roundedOutline(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
-        if (w <= 0 || h <= 0) return;
-        int r = Math.max(0, Math.min(radius, Math.min(w, h) / 2));
+        if (w <= 0 || h <= 0 || ColorUtil.alpha(color) == 0) return;
+        int r = Math.max(1, Math.min(radius, Math.min(w, h) / 2));
         g.fill(x + r, y, x + w - r, y + 1, color);
         g.fill(x + r, y + h - 1, x + w - r, y + h, color);
         g.fill(x, y + r, x + 1, y + h - r, color);
         g.fill(x + w - 1, y + r, x + w, y + h - r, color);
-        for (int i = 0; i < r; i++) {
-            double dy = r - i - 0.5;
-            int cut = r - (int) Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
-            double dy2 = r - i - 1.5;
-            int cut2 = i + 1 < r ? r - (int) Math.round(Math.sqrt(Math.max(0, r * r - dy2 * dy2))) : 0;
-            int from = Math.min(cut, cut2 == 0 ? cut : cut2), to = Math.max(cut, cut2 == 0 ? cut + 1 : cut2);
-            if (to <= from) to = from + 1;
-            g.fill(x + from, y + i, x + to, y + i + 1, color);
-            g.fill(x + w - to, y + i, x + w - from, y + i + 1, color);
-            g.fill(x + from, y + h - i - 1, x + to, y + h - i, color);
-            g.fill(x + w - to, y + h - i - 1, x + w - from, y + h - i, color);
-        }
+        int n = px(g, r);
+        var tex = Shapes.ring(n, Math.min(n, px(g, 1)));
+        quarter(g, tex, x, y, r, n, 0, 0, color);
+        quarter(g, tex, x + w - r, y, r, n, 1, 0, color);
+        quarter(g, tex, x, y + h - r, r, n, 0, 1, color);
+        quarter(g, tex, x + w - r, y + h - r, r, n, 1, 1, color);
     }
 
     public static void gradientV(GuiGraphics g, int x, int y, int w, int h, int top, int bottom) {
@@ -69,11 +78,28 @@ public final class Render2D {
         g.renderOutline(x, y, w, h, color);
     }
 
-    /** Тень под панелью: несколько полупрозрачных рамок. */
+    /** Мягкая тень вокруг панели (гауссоподобный спад), внутри панели не рисуется. */
     public static void shadow(GuiGraphics g, int x, int y, int w, int h, int radius, int strength) {
-        for (int i = 1; i <= 4; i++) {
-            int a = Math.max(0, strength - i * (strength / 5));
-            roundedOutline(g, x - i, y - i + 1, w + i * 2, h + i * 2, radius + i, ColorUtil.argb(a, 0, 0, 0));
+        if (strength <= 0 || w <= 0 || h <= 0) return;
+        int r = Math.max(1, Math.min(radius, Math.min(w, h) / 2));
+        int s = 10;
+        int n = px(g, r), sp = px(g, s), c = r + s, nc = n + sp;
+        var tex = Shapes.shadow(n, sp);
+        int color = ColorUtil.argb(Math.min(255, strength * 2), 0, 0, 0);
+        y += 2;
+        quarter(g, tex, x - s, y - s, c, nc, 0, 0, color);
+        quarter(g, tex, x + w - r, y - s, c, nc, 1, 0, color);
+        quarter(g, tex, x - s, y + h - r, c, nc, 0, 1, color);
+        quarter(g, tex, x + w - r, y + h - r, c, nc, 1, 1, color);
+        var pl = net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED;
+        int t = nc * 2;
+        if (w > 2 * r) {
+            g.blit(pl, tex, x + r, y - s, nc - 1, 0, w - 2 * r, s, 1, sp, t, t, color);
+            g.blit(pl, tex, x + r, y + h, nc - 1, nc + n, w - 2 * r, s, 1, sp, t, t, color);
+        }
+        if (h > 2 * r) {
+            g.blit(pl, tex, x - s, y + r, 0, nc - 1, s, h - 2 * r, sp, 1, t, t, color);
+            g.blit(pl, tex, x + w, y + r, nc + n, nc - 1, s, h - 2 * r, sp, 1, t, t, color);
         }
     }
 
@@ -157,11 +183,10 @@ public final class Render2D {
 
     /** Заполненный круг. */
     public static void circle(GuiGraphics g, int cx, int cy, int radius, int color) {
-        for (int dy = -radius; dy < radius; dy++) {
-            double yy = dy + 0.5;
-            int dx = (int) Math.round(Math.sqrt(Math.max(0, radius * radius - yy * yy)));
-            g.fill(cx - dx, cy + dy, cx + dx, cy + dy + 1, color);
-        }
+        if (radius <= 0 || ColorUtil.alpha(color) == 0) return;
+        int n = px(g, radius);
+        g.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, Shapes.disk(n), cx - radius, cy - radius, 0, 0,
+                radius * 2, radius * 2, n * 2, n * 2, n * 2, n * 2, color);
     }
 
     /** Кольцо (дуга в долях 0..1 от верха по часовой), шагами по 1 px. */

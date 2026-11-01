@@ -38,7 +38,7 @@ class ThemeContrastTest {
         assertSame(Theme.BLACK, t);
         Theme o = Theme.BLACK.withOpacity(0.75f);
         assertEquals(191, ColorUtil.alpha(o.background));
-        assertEquals(0xFFF4F4F4, o.text);          // текст не бледнеет
+        assertEquals(0xFFF2E8DF, o.text);          // текст не бледнеет
     }
 
     @Test

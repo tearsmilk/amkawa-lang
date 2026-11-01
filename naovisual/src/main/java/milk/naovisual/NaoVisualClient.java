@@ -61,6 +61,7 @@ public final class NaoVisualClient implements ClientModInitializer {
         AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
             if (level.isClientSide() && player == Minecraft.getInstance().player) {
                 Targets.onAttack(entity);
+                if (milk.naovisual.core.util.Crits.isCrit(player)) milk.naovisual.core.util.Crits.mark(entity);
                 ModuleRegistry.attack(entity);
             }
             return InteractionResult.PASS;
@@ -108,6 +109,9 @@ public final class NaoVisualClient implements ClientModInitializer {
         ModuleRegistry.register(new HandsGlowModule());
         ModuleRegistry.register(new HitboxesModule());
         ModuleRegistry.register(new JumpCirclesModule());
+        ModuleRegistry.register(new DamageNumbersModule());
+        ModuleRegistry.register(new CritEffectModule());
+        ModuleRegistry.register(new TrajectoryModule());
         ModuleRegistry.register(new TargetRenderModule());
         ModuleRegistry.register(new TrailsModule());
         // Частицы
@@ -118,6 +122,7 @@ public final class NaoVisualClient implements ClientModInitializer {
         // Мир
         ModuleRegistry.register(new BrightModule());
         ModuleRegistry.register(new FogModule());
+        ModuleRegistry.register(new ItemPhysicsModule());
         ModuleRegistry.register(new GpsModule());
         ModuleRegistry.register(new LightModule());
         ModuleRegistry.register(new TimeModule());

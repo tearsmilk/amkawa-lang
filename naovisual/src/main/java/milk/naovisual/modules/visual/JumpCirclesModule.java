@@ -9,6 +9,7 @@ import milk.naovisual.core.setting.NumberSetting;
 import milk.naovisual.core.util.Anim;
 import milk.naovisual.core.util.ColorUtil;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
@@ -31,11 +32,35 @@ public class JumpCirclesModule extends Module {
         color.setMode(ColorSetting.Mode.THEME);
     }
 
+    private final java.util.Map<Integer, Boolean> wasOnGround = new java.util.HashMap<>();
+    private final java.util.Map<Integer, Long> lastSpawn = new java.util.HashMap<>();
+
     @Override
     public void onJump(LivingEntity e) {
         if (!(e instanceof Player)) return;
         if (e != mc().player && !others.on()) return;
-        synchronized (rings) { rings.add(new double[]{e.getX(), e.getY() + 0.02, e.getZ(), System.currentTimeMillis()}); }
+        spawn(e);
+    }
+
+    /** Отрыв от земли вверх — тоже прыжок (ловит прыжок на месте и чужих игроков, у которых jumpFromGround не вызывается). */
+    @Override
+    public void onTick() {
+        if (mc().level == null || mc().player == null) return;
+        for (Player p : mc().level.players()) {
+            if (p != mc().player && !others.on()) continue;
+            boolean ground = p.onGround();
+            Boolean was = wasOnGround.put(p.getId(), ground);
+            if (Boolean.TRUE.equals(was) && !ground && p.getDeltaMovement().y > 0.08 && !p.isInWater() && !p.onClimbable()) spawn(p);
+        }
+        if (wasOnGround.size() > 256) wasOnGround.clear();
+    }
+
+    private void spawn(Entity e) {
+        long now = System.currentTimeMillis();
+        Long last = lastSpawn.get(e.getId());
+        if (last != null && now - last < 250) return;
+        lastSpawn.put(e.getId(), now);
+        synchronized (rings) { rings.add(new double[]{e.getX(), Math.floor(e.getY() * 16) / 16 + 0.04, e.getZ(), now}); }
     }
 
     @Override
@@ -65,6 +90,6 @@ public class JumpCirclesModule extends Module {
         Render3D.end(ctx);
     }
 
-    @Override public void onDisconnect() { synchronized (rings) { rings.clear(); } }
+    @Override public void onDisconnect() { synchronized (rings) { rings.clear(); } wasOnGround.clear(); lastSpawn.clear(); }
 
 }

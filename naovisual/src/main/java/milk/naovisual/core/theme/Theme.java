@@ -15,11 +15,11 @@ public final class Theme {
 
     public String name() { return name; }
 
-    /** Основная тема: чёрные полупрозрачные панели, белый текст, терракотовый акцент; непрозрачность задаёт слайдер
-     *  «Прозрачность меню» модуля «Тема» (по умолчанию 75 %). */
-    public static final Theme BLACK = new Theme("Чёрная 75 %",
-            0xFF000000, 0xFF111111, 0xFF0A0A0A, 0x1FFFFFFF,
-            0xFFF4F4F4, 0xFFBDBDBD, 0xFFD97757, 0x40D97757, 0xFFE05A4F, 0xFF6FBF7A, false);
+    /** Основная тема: тёплые тёмно-угольные полупрозрачные панели, тёплый молочный текст, терракотовый акцент;
+     *  непрозрачность задаёт слайдер «Прозрачность меню» модуля «Тема» (по умолчанию 75 %). */
+    public static final Theme BLACK = new Theme("Тёплая 75 %",
+            0xFF1E1A17, 0xFF2A2420, 0xFF241F1B, 0x24FFE9D6,
+            0xFFF2E8DF, 0xFFC9BBAF, 0xFFD97757, 0x40D97757, 0xFFE05A4F, 0xFF6FBF7A, false);
 
     /** Слоновая кость / уголь / терракота — «как у Клода». */
     public static final Theme CLAUDE = new Theme("Клод",
@@ -46,11 +46,12 @@ public final class Theme {
 
     public static Theme byName(String name) {
         for (Theme t : ALL) if (t.name.equals(name)) return t;
+        if ("Чёрная 75 %".equals(name)) return BLACK;
         return BLACK;
     }
 
     /** Подсветка строки под курсором: на тёмных темах — белый 8 %, на светлых — панель. */
-    public int hover() { return light ? panel : 0x14FFFFFF; }
+    public int hover() { return light ? panel : 0x14FFE9D6; }
 
     /** Умножает непрозрачность фона, панелей и рамок (текст и акцент не трогаем). */
     public Theme withOpacity(float factor) {
