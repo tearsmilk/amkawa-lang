@@ -447,7 +447,7 @@ final class SongSelectView: NSView, NSTableViewDataSource, NSTableViewDelegate {
 
     private func showSettings() {
         guard let win = window else { return }
-        let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 380), styleMask: [.titled], backing: .buffered, defer: false)
+        let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 410), styleMask: [.titled], backing: .buffered, defer: false)
         sheet.appearance = NSAppearance(named: .darkAqua)
         let root = FillView(color: Theme.panel)
         root.translatesAutoresizingMaskIntoConstraints = true
@@ -488,11 +488,15 @@ final class SongSelectView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         local.append(noFailAction)
         let noFail = NSButton(checkboxWithTitle: "Без провала (здоровье не кончается)", target: noFailAction, action: #selector(Action.run(_:)))
         noFail.state = s.noFail ? .on : .off
+        let mapColorsAction = Action { b in s.mapColors = (b as? NSButton)?.state == .on }
+        local.append(mapColorsAction)
+        let mapColors = NSButton(checkboxWithTitle: "Цвета кружков из карты osu! (смягчённые)", target: mapColorsAction, action: #selector(Action.run(_:)))
+        mapColors.state = s.mapColors ? .on : .off
         let hint = Theme.label("Если удары кажутся «поздними», сдвинь смещение в плюс.", font: .systemFont(ofSize: 11.5), color: Theme.muted)
         let done = PillButton("Готово") { [weak win, weak sheet] in
             if let sh = sheet { win?.endSheet(sh) }
         }
-        let stack = NSStackView(views: rows + [noFail, hint, done])
+        let stack = NSStackView(views: rows + [noFail, mapColors, hint, done])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12

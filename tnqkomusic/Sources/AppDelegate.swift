@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SongSelectDelegate, Ga
         clock.volume = settings.musicVolume
         clock.offsetMs = settings.offsetMs
         sounds.volume = settings.effectsVolume
+        Beatmap.useMapColors = settings.mapColors
         // карта перечитывается с диска, чтобы состояние объектов было чистым
         let fresh = (map.fileURL.flatMap { try? OsuParser.parse(url: $0) }) ?? map
         let g = GameView(map: fresh, clock: clock, sounds: sounds, settings: settings)

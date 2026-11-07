@@ -7,12 +7,19 @@ struct RGB: Equatable {
     func cg(alpha: Double) -> CGColor { CGColor(srgbRed: CGFloat(r), green: CGFloat(g), blue: CGFloat(b), alpha: CGFloat(alpha)) }
     func mixed(with o: RGB, _ t: Double) -> RGB { RGB(r: r + (o.r - r) * t, g: g + (o.g - g) * t, b: b + (o.b - b) * t) }
 
+    /// Пастельная мятная палитра по умолчанию.
     static let defaults = [
-        RGB(r: 0.851, g: 0.467, b: 0.341),  // терракота
-        RGB(r: 0.949, g: 0.553, b: 0.698),  // розовый
-        RGB(r: 0.608, g: 0.549, b: 1.0),    // сиреневый
-        RGB(r: 0.424, g: 0.780, b: 0.722),  // мятный
+        RGB(r: 0.62, g: 0.88, b: 0.78),  // мята
+        RGB(r: 0.66, g: 0.84, b: 0.91),  // голубая мята
+        RGB(r: 0.78, g: 0.91, b: 0.74),  // фисташка
+        RGB(r: 0.80, g: 0.79, b: 0.94),  // лаванда
     ]
+
+    /// Смягчает яркий цвет карты: ближе к белому и чуть менее насыщенный.
+    var pastel: RGB {
+        let gray = (r + g + b) / 3
+        return RGB(r: gray, g: gray, b: gray).mixed(with: self, 0.7).mixed(with: RGB(r: 1, g: 1, b: 1), 0.38)
+    }
 }
 
 struct TimingPoint {
@@ -101,7 +108,9 @@ final class Beatmap {
     var backgroundURL: URL? { background.flatMap { folder?.appendingPathComponent($0) } }
     var displayTitle: String { titleUnicode.isEmpty ? title : titleUnicode }
     var displayArtist: String { artistUnicode.isEmpty ? artist : artistUnicode }
-    var colors: [RGB] { comboColors.isEmpty ? RGB.defaults : comboColors }
+    /// Брать цвета комбо из карты (смягчённые) вместо своей мятной палитры.
+    static var useMapColors = false
+    var colors: [RGB] { comboColors.isEmpty || !Beatmap.useMapColors ? RGB.defaults : comboColors.map { $0.pastel } }
 
     /// Ключ для рекордов: «папка/файл».
     var key: String {

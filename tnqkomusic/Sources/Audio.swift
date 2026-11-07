@@ -72,11 +72,17 @@ final class HitSounds {
         // без устройства вывода (CI, отключённые колонки) движок не трогаем: AVAudioEngine бросит исключение
         let out = engine.outputNode.outputFormat(forBus: 0)
         guard out.channelCount > 0, out.sampleRate > 0 else { return }
-        hit = Self.synth(format, seconds: 0.07) { t in
-            (sin(2 * .pi * 1760 * t) * 0.45 + sin(2 * .pi * 880 * t) * 0.35 + Double.random(in: -1...1) * 0.25 * exp(-t * 200)) * exp(-t * 60)
+        // мягкий «тук»: тон 560 Гц, который чуть съезжает сверху, плавная атака и быстрое затухание
+        hit = Self.synth(format, seconds: 0.14) { t in
+            let phase = 2 * .pi * (560 * t + 260 / 70 * (1 - exp(-70 * t)))
+            let attack = 1 - exp(-t * 900)
+            let body = sin(phase) * 0.5 + sin(2 * phase) * 0.08
+            return (body * attack + sin(2 * .pi * 2400 * t) * 0.04 * exp(-t * 300)) * exp(-t * 34)
         }
-        miss = Self.synth(format, seconds: 0.25) { t in
-            sin(2 * .pi * (220 - 300 * t) * t) * 0.5 * exp(-t * 12)
+        // сброс комбо: тихий низкий «бум» вниз
+        miss = Self.synth(format, seconds: 0.3) { t in
+            let phase = 2 * .pi * (180 * t - 60 * t * t)
+            return sin(phase) * 0.35 * (1 - exp(-t * 400)) * exp(-t * 11)
         }
         for _ in 0..<8 {
             let node = AVAudioPlayerNode()

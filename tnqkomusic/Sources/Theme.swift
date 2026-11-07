@@ -9,12 +9,14 @@ enum Theme {
     static let background = hex(0x17151F)
     static let panel = hex(0x221F2C)
     static let panelHover = hex(0x2C2838)
-    static let selection = hex(0x3A2F3A)
+    static let selection = hex(0x2C3A37)
     static let border = hex(0x363143)
     static let text = hex(0xF5F2EA)
     static let muted = hex(0xA39DAF)
-    static let accent = hex(0xD97757)
-    static let pink = hex(0xF28DB2)
+    static let accent = hex(0x8FD9BF)
+    /// Текст на мятной заливке.
+    static let accentText = hex(0x1D3A32)
+    static let pink = hex(0xF3BFD3)
 
     static func serif(_ size: CGFloat, _ weight: NSFont.Weight = .semibold) -> NSFont {
         let base = NSFont.systemFont(ofSize: size, weight: weight)
@@ -79,6 +81,7 @@ final class FillView: NSView {
 /// Кнопка-«пилюля» с акцентной заливкой.
 final class PillButton: NSButton {
     private let fill: NSColor
+    private var textColor = Theme.text
     private let action_: Action
 
     init(_ title: String, accent: Bool = true, _ fn: @escaping () -> Void) {
@@ -91,8 +94,9 @@ final class PillButton: NSButton {
         target = action_
         action = #selector(Action.run(_:))
         font = .systemFont(ofSize: 14, weight: .semibold)
-        contentTintColor = Theme.text
-        attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor: Theme.text, .font: NSFont.systemFont(ofSize: 14, weight: .semibold)])
+        textColor = accent ? Theme.accentText : Theme.text
+        contentTintColor = textColor
+        attributedTitle = NSAttributedString(string: title, attributes: [.foregroundColor: textColor, .font: NSFont.systemFont(ofSize: 14, weight: .semibold)])
         translatesAutoresizingMaskIntoConstraints = false
         heightAnchor.constraint(equalToConstant: 38).isActive = true
     }
@@ -113,6 +117,6 @@ final class PillButton: NSButton {
 
     func setTitle(_ t: String) {
         title = t
-        attributedTitle = NSAttributedString(string: t, attributes: [.foregroundColor: Theme.text, .font: NSFont.systemFont(ofSize: 14, weight: .semibold)])
+        attributedTitle = NSAttributedString(string: t, attributes: [.foregroundColor: textColor, .font: NSFont.systemFont(ofSize: 14, weight: .semibold)])
     }
 }

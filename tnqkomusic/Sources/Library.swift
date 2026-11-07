@@ -175,7 +175,7 @@ final class Settings {
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
-        defaults.register(defaults: ["musicVolume": 0.8, "effectsVolume": 0.6, "offsetMs": 0.0, "dim": 0.7, "noFail": false, "cursorSize": 1.0])
+        defaults.register(defaults: ["musicVolume": 0.8, "effectsVolume": 0.6, "offsetMs": 0.0, "dim": 0.7, "noFail": false, "cursorSize": 1.0, "mapColors": false])
     }
 
     var musicVolume: Float { get { defaults.float(forKey: "musicVolume") } set { defaults.set(newValue, forKey: "musicVolume") } }
@@ -183,6 +183,7 @@ final class Settings {
     var offsetMs: Double { get { defaults.double(forKey: "offsetMs") } set { defaults.set(newValue, forKey: "offsetMs") } }
     var dim: Double { get { defaults.double(forKey: "dim") } set { defaults.set(newValue, forKey: "dim") } }
     var noFail: Bool { get { defaults.bool(forKey: "noFail") } set { defaults.set(newValue, forKey: "noFail") } }
+    var mapColors: Bool { get { defaults.bool(forKey: "mapColors") } set { defaults.set(newValue, forKey: "mapColors") } }
     var cursorSize: Double { get { defaults.double(forKey: "cursorSize") } set { defaults.set(newValue, forKey: "cursorSize") } }
 
     struct Record {

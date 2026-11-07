@@ -431,7 +431,7 @@ final class GameView: NSView {
             ctx.saveGState()
             ctx.addEllipse(in: rect)
             ctx.clip()
-            let top = color.mixed(with: RGB(r: 1, g: 1, b: 1), 0.18).cg, bottom = color.mixed(with: RGB(r: 0, g: 0, b: 0), 0.22).cg
+            let top = color.mixed(with: RGB(r: 1, g: 1, b: 1), 0.28).cg, bottom = color.mixed(with: RGB(r: 0.1, g: 0.2, b: 0.18), 0.12).cg
             if let g = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: [top, bottom] as CFArray, locations: [0, 1]) {
                 ctx.drawLinearGradient(g, start: CGPoint(x: c.x, y: rect.minY), end: CGPoint(x: c.x, y: rect.maxY), options: [])
             }
@@ -440,7 +440,7 @@ final class GameView: NSView {
             ctx.setLineWidth(max(2, r * 0.11))
             ctx.strokeEllipse(in: rect.insetBy(dx: r * 0.055, dy: r * 0.055))
             if let n = number {
-                let s = NSAttributedString(string: "\(n)", attributes: [.font: Theme.rounded(r * 0.78, .heavy), .foregroundColor: NSColor.white])
+                let s = NSAttributedString(string: "\(n)", attributes: [.font: Theme.rounded(r * 0.78, .heavy), .foregroundColor: Theme.accentText])
                 let sz = s.size()
                 s.draw(at: CGPoint(x: c.x - sz.width / 2, y: c.y - sz.height / 2))
             }
@@ -471,8 +471,8 @@ final class GameView: NSView {
             ctx.setLineJoin(.round)
             let dark = RGB(r: 0.08, g: 0.06, b: 0.12)
             ctx.addPath(path); ctx.setStrokeColor(CGColor(gray: 1, alpha: 1)); ctx.setLineWidth(r * 2); ctx.strokePath()
-            ctx.addPath(path); ctx.setStrokeColor(color.mixed(with: dark, 0.6).cg); ctx.setLineWidth(r * 1.72); ctx.strokePath()
-            ctx.addPath(path); ctx.setStrokeColor(color.mixed(with: dark, 0.35).cg); ctx.setLineWidth(r * 0.9); ctx.strokePath()
+            ctx.addPath(path); ctx.setStrokeColor(color.mixed(with: dark, 0.55).cg); ctx.setLineWidth(r * 1.72); ctx.strokePath()
+            ctx.addPath(path); ctx.setStrokeColor(color.mixed(with: dark, 0.3).cg); ctx.setLineWidth(r * 0.9); ctx.strokePath()
             let end = CGPoint(x: (pts.last?.x ?? 0) - rect.minX, y: (pts.last?.y ?? 0) - rect.minY)
             ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.9))
             ctx.setLineWidth(max(2, r * 0.1))
@@ -695,7 +695,7 @@ final class GameView: NSView {
         combo.draw(at: CGPoint(x: 22, y: h - combo.size().height - 14))
 
         if canSkip && !paused {
-            let s = NSAttributedString(string: "Пробел — пропустить вступление", attributes: [.font: Self.skipFont, .foregroundColor: Theme.text])
+            let s = NSAttributedString(string: "Пробел — пропустить вступление", attributes: [.font: Self.skipFont, .foregroundColor: Theme.accentText])
             let sz = s.size()
             let r = CGRect(x: w - sz.width - 48, y: h - sz.height - 40, width: sz.width + 28, height: sz.height + 14)
             ctx.setFillColor(Theme.accent.withAlphaComponent(0.85).cgColor)
