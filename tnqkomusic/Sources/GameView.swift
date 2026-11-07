@@ -7,7 +7,73 @@ protocol GameViewDelegate: AnyObject {
     func gameQuit(_ view: GameView)
 }
 
-/// Игровой экран: поле 512×384 osu!-пикселей вписано в окно, отрисовка Core Graphics по CVDisplayLink.
+/// Не даёт кадрам копиться в очереди главного потока: следующий тик ставится, только когда прошлый отработал.
+private final class TickGate {
+    private let lock = NSLock()
+    private var pending = false
+
+    func enter() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if pending { return false }
+        pending = true
+        return true
+    }
+
+    func leave() {
+        lock.lock()
+        pending = false
+        lock.unlock()
+    }
+}
+
+/// Прозрачный холст поверх фона; рисует через GameView.
+private final class Canvas: NSView {
+    weak var game: GameView?
+    override var isFlipped: Bool { true }
+    override var isOpaque: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        game?.render(ctx)
+    }
+}
+
+/// Фон: картинка — содержимое слоя (обычная, не перевёрнутая система координат).
+private final class BackgroundView: NSView {
+    var image: CGImage? { didSet { needsDisplay = true } }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override var wantsUpdateLayer: Bool { true }
+    override func updateLayer() {
+        layer?.backgroundColor = Theme.background.cgColor
+        layer?.contents = image
+        layer?.contentsGravity = .resizeAspectFill
+        layer?.masksToBounds = true
+    }
+}
+
+/// Курсор — отдельный слой: двигается по событию мыши сразу, не дожидаясь перерисовки кадра.
+private final class CursorView: NSView {
+    var pressed = false { didSet { if pressed != oldValue { needsDisplay = true } } }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override var isOpaque: Bool { false }
+    override func draw(_ dirtyRect: NSRect) {
+        let r = bounds.insetBy(dx: 3, dy: 3)
+        Theme.text.withAlphaComponent(0.95).setFill()
+        NSBezierPath(ovalIn: r).fill()
+        Theme.accent.setStroke()
+        let ring = NSBezierPath(ovalIn: r.insetBy(dx: 1.5, dy: 1.5))
+        ring.lineWidth = 3
+        ring.stroke()
+        if pressed {
+            Theme.accent.setFill()
+            NSBezierPath(ovalIn: r.insetBy(dx: r.width * 0.28, dy: r.height * 0.28)).fill()
+        }
+    }
+}
+
+/// Игровой экран: поле 512×384 osu!-пикселей вписано в окно.
+/// Фон — содержимое слоя (собирает видеокарта), кружки и слайдеры — заранее отрисованные спрайты.
 final class GameView: NSView {
     let map: Beatmap
     let session: GameSession
@@ -19,7 +85,11 @@ final class GameView: NSView {
     /// Время для самопроверки, когда нет музыки.
     var manualTime: Double = 0
 
+    private let backdrop = BackgroundView()
+    private let canvas = Canvas()
+    private let cursor = CursorView()
     private var link: CVDisplayLink?
+    private let gate = TickGate()
     private var paused = false
     private var ended = false
     private var heldKeys = Set<UInt16>()
@@ -29,9 +99,19 @@ final class GameView: NSView {
     private var overlay: NSView?
     private var cursorHidden = false
     private var drawStart = 0
-    private var pathCache: [Int: (scale: CGFloat, path: CGPath)] = [:]
     private var lastBreakFlash: Double = -10_000
     private var resignObserver: NSObjectProtocol?
+
+    // кэш спрайтов
+    private var spriteKey: (radius: CGFloat, scale: CGFloat) = (0, 0)
+    private var circleSprites: [String: CGImage] = [:]
+    private var sliderSprites: [Int: (image: CGImage, rect: CGRect)] = [:]
+
+    private static let hudScoreFont = Theme.rounded(34, .bold)
+    private static let hudAccFont = Theme.rounded(20, .semibold)
+    private static let hudComboFont = Theme.rounded(44, .heavy)
+    private static let skipFont = NSFont.systemFont(ofSize: 15, weight: .semibold)
+    private var popupFonts: [Int: NSFont] = [:]
 
     init(map: Beatmap, clock: MusicClock?, sounds: HitSounds?, settings: Settings) {
         self.map = map
@@ -42,10 +122,25 @@ final class GameView: NSView {
         session.noFail = settings.noFail
         super.init(frame: NSRect(x: 0, y: 0, width: 1280, height: 800))
         wantsLayer = true
-        layerContentsRedrawPolicy = .onSetNeedsDisplay
         if let url = map.backgroundURL, let img = NSImage(contentsOf: url) {
-            background = img.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            background = GameView.dimmed(img, dim: settings.dim)
         }
+        backdrop.wantsLayer = true
+        backdrop.image = background
+        backdrop.frame = bounds
+        backdrop.autoresizingMask = [.width, .height]
+        addSubview(backdrop)
+        canvas.game = self
+        canvas.wantsLayer = true
+        canvas.layerContentsRedrawPolicy = .onSetNeedsDisplay
+        canvas.frame = bounds
+        canvas.autoresizingMask = [.width, .height]
+        addSubview(canvas)
+        let cs = 30 * CGFloat(settings.cursorSize)
+        cursor.frame = NSRect(x: bounds.midX, y: bounds.midY, width: cs, height: cs)
+        cursor.wantsLayer = true
+        cursor.isHidden = true
+        addSubview(cursor)
         session.onHit = { [weak self] _ in self?.sounds?.playHit() }
         session.onComboBreak = { [weak self] in
             guard let self = self else { return }
@@ -60,9 +155,21 @@ final class GameView: NSView {
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
-    override var isOpaque: Bool { true }
-
     var time: Double { clock?.timeMs ?? manualTime }
+
+    /// Фон уменьшается до ~1920 px и затемняется один раз — дальше его только показывает слой.
+    static func dimmed(_ img: NSImage, dim: Double) -> CGImage? {
+        guard let src = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let k = min(1, 1920 / CGFloat(max(src.width, 1)))
+        let w = max(1, Int(CGFloat(src.width) * k)), h = max(1, Int(CGFloat(src.height) * k))
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return src }
+        ctx.interpolationQuality = .high
+        ctx.draw(src, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.setFillColor(CGColor(gray: 0, alpha: CGFloat(max(0, min(1, dim)))))
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        return ctx.makeImage()
+    }
 
     // MARK: запуск / пауза
 
@@ -71,8 +178,7 @@ final class GameView: NSView {
         window?.acceptsMouseMovedEvents = true
         let first = map.firstTime
         let lead = max(map.audioLeadIn, 0) / 1000
-        let from = min(0, (first - 1800) / 1000) - lead
-        clock?.start(from: from)
+        clock?.start(from: min(0, (first - 1800) / 1000) - lead)
         setCursorHidden(true)
         startLink()
         resignObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main) { [weak self] _ in
@@ -94,8 +200,13 @@ final class GameView: NSView {
         var l: CVDisplayLink?
         CVDisplayLinkCreateWithActiveCGDisplays(&l)
         guard let dl = l else { return }
+        let gate = self.gate
         CVDisplayLinkSetOutputHandler(dl) { [weak self] _, _, _, _, _ in
-            DispatchQueue.main.async { self?.tick() }
+            guard gate.enter() else { return kCVReturnSuccess }
+            DispatchQueue.main.async {
+                self?.tick()
+                gate.leave()
+            }
             return kCVReturnSuccess
         }
         CVDisplayLinkStart(dl)
@@ -108,6 +219,7 @@ final class GameView: NSView {
     }
 
     private func setCursorHidden(_ hidden: Bool) {
+        cursor.isHidden = !hidden
         guard hidden != cursorHidden else { return }
         if hidden { NSCursor.hide() } else { NSCursor.unhide() }
         cursorHidden = hidden
@@ -119,7 +231,7 @@ final class GameView: NSView {
         clock?.pause()
         setCursorHidden(false)
         showOverlay(title: "Пауза", subtitle: "Esc — продолжить", resume: true)
-        needsDisplay = true
+        canvas.needsDisplay = true
     }
 
     func resume() {
@@ -167,27 +279,34 @@ final class GameView: NSView {
         for b in buttons { b.widthAnchor.constraint(equalToConstant: 240).isActive = true }
         o.addSubview(stack)
         NSLayoutConstraint.activate([stack.centerXAnchor.constraint(equalTo: o.centerXAnchor), stack.centerYAnchor.constraint(equalTo: o.centerYAnchor)])
-        addSubview(o)
+        addSubview(o, positioned: .above, relativeTo: cursor)
         overlay = o
     }
 
     // MARK: кадр
 
-    private var cursorView: CGPoint {
+    private var cursorPoint: CGPoint {
         guard let w = window else { return CGPoint(x: bounds.midX, y: bounds.midY) }
         return convert(w.mouseLocationOutsideOfEventStream, from: nil)
     }
 
     private var held: Bool { !heldKeys.isEmpty || mouseButtons > 0 }
 
+    private func moveCursor(_ p: CGPoint) {
+        let s = cursor.frame.width
+        cursor.setFrameOrigin(NSPoint(x: p.x - s / 2, y: p.y - s / 2))
+        cursor.pressed = held
+    }
+
     func tick() {
         guard !paused, !ended else { return }
         let t = time
-        let c = cursorView
+        let c = cursorPoint
+        moveCursor(c)
         session.update(t: t, cursor: toOsu(c), held: held)
         trail.append(c)
-        if trail.count > 10 { trail.removeFirst(trail.count - 10) }
-        needsDisplay = true
+        if trail.count > 8 { trail.removeFirst(trail.count - 8) }
+        canvas.needsDisplay = true
         if session.failed {
             fail()
         } else if session.finished && t > session.endTime + 1200 {
@@ -201,8 +320,13 @@ final class GameView: NSView {
 
     private func press() {
         guard !paused, !ended else { return }
-        session.press(at: time, pos: toOsu(cursorView))
+        session.press(at: time, pos: toOsu(cursorPoint))
+        cursor.pressed = true
     }
+
+    override func mouseMoved(with event: NSEvent) { if !paused { moveCursor(convert(event.locationInWindow, from: nil)) } }
+    override func mouseDragged(with event: NSEvent) { mouseMoved(with: event) }
+    override func rightMouseDragged(with event: NSEvent) { mouseMoved(with: event) }
 
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
@@ -219,12 +343,15 @@ final class GameView: NSView {
         }
     }
 
-    override func keyUp(with event: NSEvent) { heldKeys.remove(event.keyCode) }
+    override func keyUp(with event: NSEvent) {
+        heldKeys.remove(event.keyCode)
+        cursor.pressed = held
+    }
 
     override func mouseDown(with event: NSEvent) { mouseButtons += 1; press() }
-    override func mouseUp(with event: NSEvent) { mouseButtons = max(0, mouseButtons - 1) }
+    override func mouseUp(with event: NSEvent) { mouseButtons = max(0, mouseButtons - 1); cursor.pressed = held }
     override func rightMouseDown(with event: NSEvent) { mouseButtons += 1; press() }
-    override func rightMouseUp(with event: NSEvent) { mouseButtons = max(0, mouseButtons - 1) }
+    override func rightMouseUp(with event: NSEvent) { mouseButtons = max(0, mouseButtons - 1); cursor.pressed = held }
 
     var canSkip: Bool { map.firstTime - time > 3000 }
 
@@ -252,49 +379,133 @@ final class GameView: NSView {
         return CGPoint(x: (p.x - o.x) / s, y: (p.y - o.y) / s)
     }
 
+    // MARK: спрайты
+
+    private var backingScale: CGFloat { window?.backingScaleFactor ?? 2 }
+
+    /// Картинка size×size точек с началом координат в левом верхнем углу (как у холста).
+    private func sprite(width: CGFloat, height: CGFloat, _ draw: (CGContext) -> Void) -> CGImage? {
+        let s = backingScale
+        let w = max(1, Int(ceil(width * s))), h = max(1, Int(ceil(height * s)))
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.scaleBy(x: s, y: s)
+        ctx.translateBy(x: 0, y: height)
+        ctx.scaleBy(x: 1, y: -1)
+        let previous = NSGraphicsContext.current
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: true)
+        draw(ctx)
+        NSGraphicsContext.current = previous
+        return ctx.makeImage()
+    }
+
+    /// Рисует спрайт в перевёрнутом холсте без отражения.
+    private func blit(_ ctx: CGContext, _ img: CGImage, in r: CGRect, alpha: CGFloat) {
+        guard alpha > 0.003 else { return }
+        ctx.saveGState()
+        ctx.setAlpha(alpha)
+        ctx.translateBy(x: 0, y: r.minY + r.maxY)
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(img, in: r)
+        ctx.restoreGState()
+    }
+
+    private func validateSprites(radius r: CGFloat) {
+        let s = backingScale
+        if spriteKey.radius != r || spriteKey.scale != s {
+            spriteKey = (r, s)
+            circleSprites.removeAll()
+            sliderSprites.removeAll()
+        }
+    }
+
+    private func circleSprite(colorIndex: Int, color: RGB, number: Int?, r: CGFloat) -> CGImage? {
+        let key = "\(colorIndex)-\(number ?? 0)"
+        if let img = circleSprites[key] { return img }
+        let size = r * 2.3
+        let img = sprite(width: size, height: size) { ctx in
+            let c = CGPoint(x: size / 2, y: size / 2)
+            let rect = CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)
+            ctx.setFillColor(CGColor(gray: 0, alpha: 0.35))
+            ctx.fillEllipse(in: rect.offsetBy(dx: 0, dy: r * 0.06).insetBy(dx: -r * 0.04, dy: -r * 0.04))
+            ctx.saveGState()
+            ctx.addEllipse(in: rect)
+            ctx.clip()
+            let top = color.mixed(with: RGB(r: 1, g: 1, b: 1), 0.18).cg, bottom = color.mixed(with: RGB(r: 0, g: 0, b: 0), 0.22).cg
+            if let g = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: [top, bottom] as CFArray, locations: [0, 1]) {
+                ctx.drawLinearGradient(g, start: CGPoint(x: c.x, y: rect.minY), end: CGPoint(x: c.x, y: rect.maxY), options: [])
+            }
+            ctx.restoreGState()
+            ctx.setStrokeColor(CGColor(gray: 1, alpha: 1))
+            ctx.setLineWidth(max(2, r * 0.11))
+            ctx.strokeEllipse(in: rect.insetBy(dx: r * 0.055, dy: r * 0.055))
+            if let n = number {
+                let s = NSAttributedString(string: "\(n)", attributes: [.font: Theme.rounded(r * 0.78, .heavy), .foregroundColor: NSColor.white])
+                let sz = s.size()
+                s.draw(at: CGPoint(x: c.x - sz.width / 2, y: c.y - sz.height / 2))
+            }
+        }
+        circleSprites[key] = img
+        return img
+    }
+
+    private func drawCircle(_ ctx: CGContext, _ o: HitObject, at p: CGPoint, r: CGFloat, number: Int?, alpha: Double, grow: CGFloat) {
+        guard alpha > 0.003, let img = circleSprite(colorIndex: o.colorIndex, color: color(o), number: number, r: r) else { return }
+        let size = r * 2.3 * grow
+        blit(ctx, img, in: CGRect(x: p.x - size / 2, y: p.y - size / 2, width: size, height: size), alpha: CGFloat(alpha))
+    }
+
+    /// Тело слайдера рисуется один раз в картинку по своим границам.
+    private func sliderSprite(_ i: Int, _ o: HitObject, r: CGFloat, color: RGB) -> (image: CGImage, rect: CGRect)? {
+        if let s = sliderSprites[i] { return s }
+        let pts = (o.path?.points ?? [o.pos]).map(toView)
+        var minX = CGFloat.infinity, minY = CGFloat.infinity, maxX = -CGFloat.infinity, maxY = -CGFloat.infinity
+        for p in pts { minX = min(minX, p.x); minY = min(minY, p.y); maxX = max(maxX, p.x); maxY = max(maxY, p.y) }
+        let rect = CGRect(x: minX - r - 4, y: minY - r - 4, width: maxX - minX + 2 * r + 8, height: maxY - minY + 2 * r + 8)
+        guard let img = sprite(width: rect.width, height: rect.height, { ctx in
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: pts[0].x - rect.minX, y: pts[0].y - rect.minY))
+            for p in pts.dropFirst() { path.addLine(to: CGPoint(x: p.x - rect.minX, y: p.y - rect.minY)) }
+            if pts.count == 1 { path.addLine(to: CGPoint(x: pts[0].x - rect.minX + 0.1, y: pts[0].y - rect.minY)) }
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+            let dark = RGB(r: 0.08, g: 0.06, b: 0.12)
+            ctx.addPath(path); ctx.setStrokeColor(CGColor(gray: 1, alpha: 1)); ctx.setLineWidth(r * 2); ctx.strokePath()
+            ctx.addPath(path); ctx.setStrokeColor(color.mixed(with: dark, 0.6).cg); ctx.setLineWidth(r * 1.72); ctx.strokePath()
+            ctx.addPath(path); ctx.setStrokeColor(color.mixed(with: dark, 0.35).cg); ctx.setLineWidth(r * 0.9); ctx.strokePath()
+            let end = CGPoint(x: (pts.last?.x ?? 0) - rect.minX, y: (pts.last?.y ?? 0) - rect.minY)
+            ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.9))
+            ctx.setLineWidth(max(2, r * 0.1))
+            ctx.strokeEllipse(in: CGRect(x: end.x - r * 0.945, y: end.y - r * 0.945, width: r * 1.89, height: r * 1.89))
+        }) else { return nil }
+        sliderSprites[i] = (img, rect)
+        return (img, rect)
+    }
+
     // MARK: отрисовка
 
-    override func draw(_ dirtyRect: NSRect) {
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+    func render(_ ctx: CGContext) {
         let t = time
-        drawBackground(ctx)
+        let r = CGFloat(session.diff.radius) * scale
+        validateSprites(radius: r)
+        ctx.interpolationQuality = .medium
 
         let objects = map.objects
         let preempt = session.diff.preempt
-        while drawStart < objects.count && objects[drawStart].endTime + 800 < t && session.states[drawStart].result != nil { drawStart += 1 }
+        while drawStart < objects.count && objects[drawStart].endTime + 800 < t && session.states[drawStart].result != nil {
+            sliderSprites[drawStart] = nil
+            drawStart += 1
+        }
         var visible: [Int] = []
         var i = drawStart
         while i < objects.count && objects[i].time - preempt <= t {
             if objects[i].endTime + 800 >= t || session.states[i].result == nil { visible.append(i) }
             i += 1
         }
-        for idx in visible.reversed() { drawObject(ctx, idx, t: t) }
+        for idx in visible.reversed() { drawObject(ctx, idx, t: t, r: r) }
         for p in session.popups { drawPopup(ctx, p, t: t) }
         drawHUD(ctx, t: t)
-        if !paused && !ended { drawCursor(ctx) }
-    }
-
-    private func drawBackground(_ ctx: CGContext) {
-        ctx.setFillColor(Theme.background.cgColor)
-        ctx.fill(bounds)
-        if let bg = background {
-            let iw = CGFloat(bg.width), ih = CGFloat(bg.height)
-            let s = max(bounds.width / iw, bounds.height / ih)
-            let r = CGRect(x: (bounds.width - iw * s) / 2, y: (bounds.height - ih * s) / 2, width: iw * s, height: ih * s)
-            ctx.saveGState()
-            // в перевёрнутой системе картинку нужно отразить обратно
-            ctx.translateBy(x: 0, y: r.maxY + r.minY)
-            ctx.scaleBy(x: 1, y: -1)
-            ctx.draw(bg, in: r)
-            ctx.restoreGState()
-            ctx.setFillColor(CGColor(gray: 0, alpha: CGFloat(settings.dim)))
-            ctx.fill(bounds)
-        }
-        // мягкая рамка поля
-        let pf = CGRect(origin: toView(.zero), size: CGSize(width: 512 * scale, height: 384 * scale)).insetBy(dx: -40 * scale, dy: -40 * scale)
-        ctx.setFillColor(CGColor(gray: 1, alpha: 0.02))
-        ctx.addPath(CGPath(roundedRect: pf, cornerWidth: 24, cornerHeight: 24, transform: nil))
-        ctx.fillPath()
+        if !paused && !ended { drawTrail(ctx) }
     }
 
     private func color(_ o: HitObject) -> RGB {
@@ -302,11 +513,10 @@ final class GameView: NSView {
         return colors[o.colorIndex % colors.count]
     }
 
-    private func drawObject(_ ctx: CGContext, _ i: Int, t: Double) {
+    private func drawObject(_ ctx: CGContext, _ i: Int, t: Double, r: CGFloat) {
         let o = map.objects[i]
         let st = session.states[i]
         let d = session.diff
-        let r = CGFloat(d.radius) * scale
         let appear = o.time - d.preempt
         var alpha = max(0, min(1, (t - appear) / d.fadeIn))
         let c = color(o)
@@ -316,25 +526,24 @@ final class GameView: NSView {
             if let res = st.result {
                 let age = t - st.resultTime
                 if res == .miss {
-                    alpha = max(0, 1 - age / 120) * 0.6
-                    drawCircle(ctx, at: toView(o.pos), r: r, color: c, number: o.comboNumber, alpha: alpha, grow: 1)
+                    drawCircle(ctx, o, at: toView(o.pos), r: r, number: o.comboNumber, alpha: max(0, 1 - age / 120) * 0.6, grow: 1)
                 } else {
                     let k = max(0, min(1, age / 180))
-                    drawCircle(ctx, at: toView(o.pos), r: r, color: c, number: nil, alpha: (1 - k) * 0.9, grow: 1 + 0.35 * CGFloat(k))
+                    drawCircle(ctx, o, at: toView(o.pos), r: r, number: nil, alpha: (1 - k) * 0.9, grow: 1 + 0.35 * CGFloat(k))
                 }
                 return
             }
-            drawCircle(ctx, at: toView(o.pos), r: r, color: c, number: o.comboNumber, alpha: alpha, grow: 1)
+            drawCircle(ctx, o, at: toView(o.pos), r: r, number: o.comboNumber, alpha: alpha, grow: 1)
             drawApproach(ctx, at: toView(o.pos), r: r, color: c, progress: (t - appear) / d.preempt, alpha: alpha)
 
         case .slider:
-            if let _ = st.result {
-                let age = t - st.resultTime
-                alpha = max(0, 1 - age / 200)
+            if st.result != nil {
+                alpha = max(0, 1 - (t - st.resultTime) / 200)
                 if alpha <= 0 { return }
             }
-            drawSliderBody(ctx, i, o, r: r, color: c, alpha: alpha)
-            // стрелка повтора
+            if let body = sliderSprite(i, o, r: r, color: c) {
+                blit(ctx, body.image, in: body.rect, alpha: CGFloat(alpha * 0.92))
+            }
             if o.slides > 1 && st.result == nil {
                 let span = Int(max(0, (t - o.time) / o.spanDuration))
                 if span < o.slides - 1 {
@@ -344,22 +553,22 @@ final class GameView: NSView {
                     drawArrow(ctx, at: toView(tip), towards: toView(back), r: r, alpha: alpha)
                 }
             }
-            // голова
             if st.headHit == nil {
-                drawCircle(ctx, at: toView(o.pos), r: r, color: c, number: o.comboNumber, alpha: alpha, grow: 1)
+                drawCircle(ctx, o, at: toView(o.pos), r: r, number: o.comboNumber, alpha: alpha, grow: 1)
                 drawApproach(ctx, at: toView(o.pos), r: r, color: c, progress: (t - appear) / d.preempt, alpha: alpha)
             } else if st.headHit == true {
                 let k = max(0, min(1, (t - st.headTime) / 180))
-                if k < 1 { drawCircle(ctx, at: toView(o.pos), r: r, color: c, number: nil, alpha: (1 - k) * 0.9, grow: 1 + 0.35 * CGFloat(k)) }
+                if k < 1 { drawCircle(ctx, o, at: toView(o.pos), r: r, number: nil, alpha: (1 - k) * 0.9, grow: 1 + 0.35 * CGFloat(k)) }
             }
-            // шар
             if t >= o.time && st.result == nil {
                 let ball = toView(o.sliderPosition(at: min(t, o.endTime)))
+                let br = r * 0.82
+                let rect = CGRect(x: ball.x - br, y: ball.y - br, width: br * 2, height: br * 2)
                 ctx.setFillColor(c.mixed(with: RGB(r: 1, g: 1, b: 1), 0.25).cg(alpha: 0.95))
-                ctx.fillEllipse(in: CGRect(x: ball.x - r * 0.82, y: ball.y - r * 0.82, width: r * 1.64, height: r * 1.64))
+                ctx.fillEllipse(in: rect)
                 ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.95))
                 ctx.setLineWidth(max(2, r * 0.1))
-                ctx.strokeEllipse(in: CGRect(x: ball.x - r * 0.82, y: ball.y - r * 0.82, width: r * 1.64, height: r * 1.64))
+                ctx.strokeEllipse(in: rect)
                 if st.tracking {
                     let fr = r * 2.0
                     ctx.setStrokeColor(c.cg(alpha: 0.7))
@@ -374,86 +583,13 @@ final class GameView: NSView {
         }
     }
 
-    private func drawCircle(_ ctx: CGContext, at p: CGPoint, r: CGFloat, color: RGB, number: Int?, alpha: Double, grow: CGFloat) {
-        guard alpha > 0.001 else { return }
-        let rr = r * grow
-        let rect = CGRect(x: p.x - rr, y: p.y - rr, width: rr * 2, height: rr * 2)
-        ctx.saveGState()
-        ctx.setAlpha(CGFloat(alpha))
-        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-        // тень
-        ctx.setFillColor(CGColor(gray: 0, alpha: 0.35))
-        ctx.fillEllipse(in: rect.offsetBy(dx: 0, dy: rr * 0.06).insetBy(dx: -rr * 0.04, dy: -rr * 0.04))
-        // градиентная заливка
-        ctx.saveGState()
-        ctx.addEllipse(in: rect)
-        ctx.clip()
-        let top = color.mixed(with: RGB(r: 1, g: 1, b: 1), 0.18).cg, bottom = color.mixed(with: RGB(r: 0, g: 0, b: 0), 0.22).cg
-        if let g = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: [top, bottom] as CFArray, locations: [0, 1]) {
-            ctx.drawLinearGradient(g, start: CGPoint(x: p.x, y: rect.minY), end: CGPoint(x: p.x, y: rect.maxY), options: [])
-        }
-        ctx.restoreGState()
-        ctx.setStrokeColor(CGColor(gray: 1, alpha: 1))
-        ctx.setLineWidth(max(2, rr * 0.11))
-        ctx.strokeEllipse(in: rect.insetBy(dx: rr * 0.055, dy: rr * 0.055))
-        if let n = number {
-            let font = Theme.rounded(r * 0.78, .heavy)
-            let s = NSAttributedString(string: "\(n)", attributes: [.font: font, .foregroundColor: NSColor.white])
-            let size = s.size()
-            s.draw(at: CGPoint(x: p.x - size.width / 2, y: p.y - size.height / 2))
-        }
-        ctx.endTransparencyLayer()
-        ctx.restoreGState()
-    }
-
     private func drawApproach(_ ctx: CGContext, at p: CGPoint, r: CGFloat, color: RGB, progress: Double, alpha: Double) {
         let k = CGFloat(max(0, min(1, progress)))
         let ar = r * (1 + 3 * (1 - k))
-        guard ar > r * 1.01 else { return }
+        guard ar > r * 1.01, alpha > 0.003 else { return }
         ctx.setStrokeColor(color.mixed(with: RGB(r: 1, g: 1, b: 1), 0.3).cg(alpha: alpha * 0.9))
         ctx.setLineWidth(max(2, r * 0.08))
         ctx.strokeEllipse(in: CGRect(x: p.x - ar, y: p.y - ar, width: ar * 2, height: ar * 2))
-    }
-
-    private func sliderPath(_ i: Int, _ o: HitObject) -> CGPath {
-        let s = scale
-        if let cached = pathCache[i], cached.scale == s { return cached.path }
-        let path = CGMutablePath()
-        let pts = o.path?.points ?? [o.pos]
-        path.move(to: toView(pts[0]))
-        for p in pts.dropFirst() { path.addLine(to: toView(p)) }
-        if pts.count == 1 { path.addLine(to: toView(pts[0])) }
-        pathCache[i] = (s, path)
-        return path
-    }
-
-    private func drawSliderBody(_ ctx: CGContext, _ i: Int, _ o: HitObject, r: CGFloat, color: RGB, alpha: Double) {
-        guard alpha > 0.001 else { return }
-        let path = sliderPath(i, o)
-        ctx.saveGState()
-        ctx.setAlpha(CGFloat(alpha))
-        ctx.beginTransparencyLayer(auxiliaryInfo: nil)
-        ctx.setLineCap(.round)
-        ctx.setLineJoin(.round)
-        ctx.addPath(path)
-        ctx.setStrokeColor(CGColor(gray: 1, alpha: 1))
-        ctx.setLineWidth(r * 2)
-        ctx.strokePath()
-        ctx.addPath(path)
-        ctx.setStrokeColor(color.mixed(with: RGB(r: 0.08, g: 0.06, b: 0.12), 0.6).cg)
-        ctx.setLineWidth(r * 2 * 0.86)
-        ctx.strokePath()
-        ctx.addPath(path)
-        ctx.setStrokeColor(color.mixed(with: RGB(r: 0.08, g: 0.06, b: 0.12), 0.35).cg(alpha: 0.6))
-        ctx.setLineWidth(r * 2 * 0.45)
-        ctx.strokePath()
-        // круг на конце
-        let end = toView(o.path?.point(at: 1) ?? o.pos)
-        ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.9))
-        ctx.setLineWidth(max(2, r * 0.1))
-        ctx.strokeEllipse(in: CGRect(x: end.x - r * 0.945, y: end.y - r * 0.945, width: r * 1.89, height: r * 1.89))
-        ctx.endTransparencyLayer()
-        ctx.restoreGState()
     }
 
     private func drawArrow(_ ctx: CGContext, at p: CGPoint, towards q: CGPoint, r: CGFloat, alpha: Double) {
@@ -473,39 +609,44 @@ final class GameView: NSView {
         let c = toView(GameSession.spinCenter)
         let big = 170 * scale
         let st = session.states[i]
-        let need = session.spinsRequired(o)
-        let got = st.spin / (2 * .pi)
-        let progress = CGFloat(max(0, min(1, got / need)))
-        ctx.saveGState()
-        ctx.setAlpha(CGFloat(alpha))
-        ctx.setFillColor(CGColor(gray: 0, alpha: 0.35))
-        ctx.fillEllipse(in: CGRect(x: c.x - big, y: c.y - big, width: big * 2, height: big * 2))
-        ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.25))
+        let progress = CGFloat(max(0, min(1, st.spin / (2 * .pi) / session.spinsRequired(o))))
+        let a = CGFloat(alpha)
+        let circle = CGRect(x: c.x - big, y: c.y - big, width: big * 2, height: big * 2)
+        ctx.setFillColor(CGColor(gray: 0, alpha: 0.35 * a))
+        ctx.fillEllipse(in: circle)
+        ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.25 * a))
         ctx.setLineWidth(6)
-        ctx.strokeEllipse(in: CGRect(x: c.x - big, y: c.y - big, width: big * 2, height: big * 2))
-        ctx.setStrokeColor(Theme.accent.cgColor)
-        ctx.setLineWidth(10)
-        ctx.setLineCap(.round)
-        ctx.addArc(center: c, radius: big, startAngle: -.pi / 2, endAngle: -.pi / 2 + 2 * .pi * progress, clockwise: false)
-        ctx.strokePath()
-        // круг, сжимающийся до конца спиннера
-        let left = CGFloat(max(0, min(1, (o.endTime - t) / max(1, o.duration))))
-        let ar = big * left
+        ctx.strokeEllipse(in: circle)
+        if progress > 0 {
+            ctx.setStrokeColor(Theme.accent.withAlphaComponent(a).cgColor)
+            ctx.setLineWidth(10)
+            ctx.setLineCap(.round)
+            ctx.addArc(center: c, radius: big, startAngle: -.pi / 2, endAngle: -.pi / 2 + 2 * .pi * progress, clockwise: false)
+            ctx.strokePath()
+        }
+        let ar = big * CGFloat(max(0, min(1, (o.endTime - t) / max(1, o.duration))))
         if ar > 4 {
-            ctx.setStrokeColor(Theme.pink.cgColor)
+            ctx.setStrokeColor(Theme.pink.withAlphaComponent(a).cgColor)
             ctx.setLineWidth(3)
             ctx.strokeEllipse(in: CGRect(x: c.x - ar, y: c.y - ar, width: ar * 2, height: ar * 2))
         }
         let text = t < o.time ? "Приготовься" : (progress >= 1 ? "Готово!" : "Крути!")
-        let s = NSAttributedString(string: text, attributes: [.font: Theme.serif(30 * scale / 1.6), .foregroundColor: Theme.text])
+        let s = NSAttributedString(string: text, attributes: [.font: popupFont(Int(30 * scale / 1.6)), .foregroundColor: Theme.text.withAlphaComponent(a)])
         let size = s.size()
         s.draw(at: CGPoint(x: c.x - size.width / 2, y: c.y - size.height / 2))
-        ctx.restoreGState()
+    }
+
+    private func popupFont(_ size: Int) -> NSFont {
+        if let f = popupFonts[size] { return f }
+        let f = Theme.rounded(CGFloat(max(8, size)), .heavy)
+        popupFonts[size] = f
+        return f
     }
 
     private func drawPopup(_ ctx: CGContext, _ p: Popup, t: Double) {
         let age = (t - p.time) / 600
         guard age >= 0, age < 1 else { return }
+        if p.judgement == .h300 { return }  // 300 — норма, не мельтешим
         let color: NSColor
         switch p.judgement {
         case .h300: color = Theme.hex(0x8EC9FF)
@@ -513,11 +654,8 @@ final class GameView: NSView {
         case .h50: color = Theme.hex(0xFFC46B)
         case .miss: color = Theme.hex(0xE0605A)
         }
-        let size = (p.judgement == .miss ? 34 : 26) * scale / 1.6
-        let s = NSAttributedString(string: p.judgement.text, attributes: [
-            .font: Theme.rounded(size, .heavy),
-            .foregroundColor: color.withAlphaComponent(CGFloat(1 - age) * (p.judgement == .h300 ? 0.55 : 1)),
-        ])
+        let size = Int((p.judgement == .miss ? 34 : 26) * scale / 1.6)
+        let s = NSAttributedString(string: p.judgement.text, attributes: [.font: popupFont(size), .foregroundColor: color.withAlphaComponent(CGFloat(1 - age))])
         let v = toView(p.pos)
         let sz = s.size()
         s.draw(at: CGPoint(x: v.x - sz.width / 2, y: v.y - sz.height / 2 - CGFloat(age) * 24 * scale))
@@ -525,25 +663,21 @@ final class GameView: NSView {
 
     private func drawHUD(_ ctx: CGContext, t: Double) {
         let w = bounds.width, h = bounds.height
-        // здоровье
         let barW = min(420, w * 0.36)
         ctx.setFillColor(CGColor(gray: 0, alpha: 0.45))
         ctx.addPath(CGPath(roundedRect: CGRect(x: 20, y: 18, width: barW, height: 10), cornerWidth: 5, cornerHeight: 5, transform: nil))
         ctx.fillPath()
-        let hpColor = session.hp < 0.25 ? Theme.hex(0xE0605A) : Theme.accent
-        ctx.setFillColor(hpColor.cgColor)
+        ctx.setFillColor((session.hp < 0.25 ? Theme.hex(0xE0605A) : Theme.accent).cgColor)
         ctx.addPath(CGPath(roundedRect: CGRect(x: 20, y: 18, width: max(10, barW * CGFloat(session.hp)), height: 10), cornerWidth: 5, cornerHeight: 5, transform: nil))
         ctx.fillPath()
 
-        // счёт и точность
-        let score = NSAttributedString(string: String(format: "%08d", session.score), attributes: [.font: Theme.rounded(34, .bold), .foregroundColor: Theme.text])
+        let score = NSAttributedString(string: String(format: "%08d", session.score), attributes: [.font: Self.hudScoreFont, .foregroundColor: Theme.text])
         let ss = score.size()
         score.draw(at: CGPoint(x: w - ss.width - 24, y: 12))
-        let acc = NSAttributedString(string: String(format: "%.2f%%", session.accuracy * 100), attributes: [.font: Theme.rounded(20, .semibold), .foregroundColor: Theme.muted])
+        let acc = NSAttributedString(string: String(format: "%.2f%%", session.accuracy * 100), attributes: [.font: Self.hudAccFont, .foregroundColor: Theme.muted])
         let asz = acc.size()
         acc.draw(at: CGPoint(x: w - asz.width - 24, y: 12 + ss.height))
 
-        // прогресс песни
         let start = map.firstTime, end = max(start + 1, map.endTime)
         let prog = CGFloat(max(0, min(1, (t - start) / (end - start))))
         let pc = CGPoint(x: w - asz.width - 46, y: 12 + ss.height + asz.height / 2)
@@ -556,14 +690,12 @@ final class GameView: NSView {
             ctx.strokePath()
         }
 
-        // комбо
-        let flash = max(0, 1 - (t - lastBreakFlash) / 400)
-        let comboColor = flash > 0 ? Theme.hex(0xE0605A) : Theme.text
-        let combo = NSAttributedString(string: "\(session.combo)×", attributes: [.font: Theme.rounded(44, .heavy), .foregroundColor: comboColor])
+        let flash = t - lastBreakFlash < 400
+        let combo = NSAttributedString(string: "\(session.combo)×", attributes: [.font: Self.hudComboFont, .foregroundColor: flash ? Theme.hex(0xE0605A) : Theme.text])
         combo.draw(at: CGPoint(x: 22, y: h - combo.size().height - 14))
 
         if canSkip && !paused {
-            let s = NSAttributedString(string: "Пробел — пропустить вступление", attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .semibold), .foregroundColor: Theme.text])
+            let s = NSAttributedString(string: "Пробел — пропустить вступление", attributes: [.font: Self.skipFont, .foregroundColor: Theme.text])
             let sz = s.size()
             let r = CGRect(x: w - sz.width - 48, y: h - sz.height - 40, width: sz.width + 28, height: sz.height + 14)
             ctx.setFillColor(Theme.accent.withAlphaComponent(0.85).cgColor)
@@ -573,24 +705,13 @@ final class GameView: NSView {
         }
     }
 
-    private func drawCursor(_ ctx: CGContext) {
+    private func drawTrail(_ ctx: CGContext) {
         let k = CGFloat(settings.cursorSize)
-        for (n, p) in trail.enumerated() {
+        for (n, p) in trail.dropLast().enumerated() {
             let a = CGFloat(n + 1) / CGFloat(trail.count + 1)
-            let r = 7 * k * a
-            ctx.setFillColor(Theme.pink.withAlphaComponent(0.35 * a).cgColor)
+            let r = 6 * k * a
+            ctx.setFillColor(Theme.pink.withAlphaComponent(0.3 * a).cgColor)
             ctx.fillEllipse(in: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
-        }
-        let c = cursorView
-        let r = 13 * k
-        ctx.setFillColor(Theme.text.withAlphaComponent(0.95).cgColor)
-        ctx.fillEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
-        ctx.setStrokeColor(Theme.accent.cgColor)
-        ctx.setLineWidth(3 * k)
-        ctx.strokeEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
-        if held {
-            ctx.setFillColor(Theme.accent.cgColor)
-            ctx.fillEllipse(in: CGRect(x: c.x - r * 0.45, y: c.y - r * 0.45, width: r * 0.9, height: r * 0.9))
         }
     }
 }
