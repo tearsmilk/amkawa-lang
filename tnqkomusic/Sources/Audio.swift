@@ -72,18 +72,8 @@ final class HitSounds {
         // без устройства вывода (CI, отключённые колонки) движок не трогаем: AVAudioEngine бросит исключение
         let out = engine.outputNode.outputFormat(forBus: 0)
         guard out.channelCount > 0, out.sampleRate > 0 else { return }
-        // мягкий «тук»: тон 560 Гц, который чуть съезжает сверху, плавная атака и быстрое затухание
-        hit = Self.synth(format, seconds: 0.14) { t in
-            let phase = 2 * .pi * (560 * t + 260 / 70 * (1 - exp(-70 * t)))
-            let attack = 1 - exp(-t * 900)
-            let body = sin(phase) * 0.5 + sin(2 * phase) * 0.08
-            return (body * attack + sin(2 * .pi * 2400 * t) * 0.04 * exp(-t * 300)) * exp(-t * 34)
-        }
-        // сброс комбо: тихий низкий «бум» вниз
-        miss = Self.synth(format, seconds: 0.3) { t in
-            let phase = 2 * .pi * (180 * t - 60 * t * t)
-            return sin(phase) * 0.35 * (1 - exp(-t * 400)) * exp(-t * 11)
-        }
+        hit = Self.synth(format, seconds: 0.14, Self.softTick)
+        miss = Self.synth(format, seconds: 0.3, Self.softThud)
         for _ in 0..<8 {
             let node = AVAudioPlayerNode()
             engine.attach(node)
@@ -106,6 +96,23 @@ final class HitSounds {
         node.volume = volume * gain
         node.scheduleBuffer(b, at: nil, options: .interrupts, completionHandler: nil)
         if !node.isPlaying { node.play() }
+    }
+
+    /// Мягкий «тук»: тон 560 Гц, чуть съезжающий сверху, плавная атака, быстрое затухание.
+    static func softTick(_ t: Double) -> Double {
+        let sweep: Double = (260.0 / 70.0) * (1.0 - exp(-70.0 * t))
+        let phase: Double = 2.0 * Double.pi * (560.0 * t + sweep)
+        let attack: Double = 1.0 - exp(-900.0 * t)
+        let body: Double = sin(phase) * 0.5 + sin(2.0 * phase) * 0.08
+        let air: Double = sin(2.0 * Double.pi * 2400.0 * t) * 0.04 * exp(-300.0 * t)
+        return (body * attack + air) * exp(-34.0 * t)
+    }
+
+    /// Сброс комбо: тихий низкий «бум» вниз.
+    static func softThud(_ t: Double) -> Double {
+        let phase: Double = 2.0 * Double.pi * (180.0 * t - 60.0 * t * t)
+        let attack: Double = 1.0 - exp(-400.0 * t)
+        return sin(phase) * 0.35 * attack * exp(-11.0 * t)
     }
 
     static func synth(_ format: AVAudioFormat, seconds: Double, _ f: (Double) -> Double) -> AVAudioPCMBuffer? {
