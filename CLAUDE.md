@@ -26,6 +26,10 @@
   Metadata API picks the pano), Mapillary panoramas (token) and Wikimedia Commons photos, own OSM slippy map for the
   guess, Natural Earth countries bundled for land-only picks and the country-streak mode; classic / streak / daily,
   local records; built into `.dmg` by `.github/workflows/theta-macos.yml`).
+  `tnqko/` — TnQkoWallpaper (live video wallpapers like Wallpaper Engine, macOS 11+ Intel only: Swift + AppKit + AVFoundation,
+  no third-party deps; borderless window at `kCGDesktopWindowLevel` per screen, one `AVQueuePlayer` + `AVPlayerLooper`, sound / fill /
+  displays / pause on battery or fullscreen, LaunchAgent autostart; `packaging/build_macos.sh` → swiftc → `--selftest` → `.dmg`;
+  `.github/workflows/tnqko-macos.yml`, releases `tnqko-v*`; no Figma design — the user asked not to).
 - **Epsilon design lives in Figma** (file `P9vRt9ShTejyOkC7fYqWU4`, team Lotus): the UI kit and *every* screen.
   When you add or change a screen, dialog or component in Epsilon, update `epsilon/design/figma/01_ui_kit.js` /
   `02_screens.js` in the same change and run them via the Figma MCP `use_figma` tool (Starter plan has a small
