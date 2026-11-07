@@ -30,6 +30,10 @@
   no third-party deps; borderless window at `kCGDesktopWindowLevel` per screen, one `AVQueuePlayer` + `AVPlayerLooper`, sound / fill /
   displays / pause on battery or fullscreen, LaunchAgent autostart; `packaging/build_macos.sh` → swiftc → `--selftest` → `.dmg`;
   `.github/workflows/tnqko-macos.yml`, releases `tnqko-v*`; no Figma design — the user asked not to).
+  `tnqkomusic/` — TnQkoMusically (osu!standard-like rhythm game, macOS 11+ Intel only, same stack as TnQkoWallpaper: Swift + AppKit +
+  AVFoundation, no deps; `.osu` parser + writer, slider curves L/P/B/C, `GameSession` = rules without rendering (autoplay in `--selftest`),
+  `GameView` = Core Graphics + CVDisplayLink, `BeatGen` = tempo/phase detection → 3 generated difficulties for the user's own tracks,
+  `.osz` via `/usr/bin/ditto`; `.github/workflows/tnqkomusic-macos.yml`, releases `tnqkomusic-v*`; own code — never copy osu! code or assets; no Figma).
 - **Epsilon design lives in Figma** (file `P9vRt9ShTejyOkC7fYqWU4`, team Lotus): the UI kit and *every* screen.
   When you add or change a screen, dialog or component in Epsilon, update `epsilon/design/figma/01_ui_kit.js` /
   `02_screens.js` in the same change and run them via the Figma MCP `use_figma` tool (Starter plan has a small
