@@ -115,7 +115,9 @@ final class SongSelectView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         search.sendsSearchStringImmediately = true
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("song"))
+        column.resizingMask = .autoresizingMask
         table.addTableColumn(column)
+        table.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
         table.headerView = nil
         table.rowHeight = 56
         table.intercellSpacing = NSSize(width: 0, height: 0)
@@ -149,6 +151,11 @@ final class SongSelectView: NSView, NSTableViewDataSource, NSTableViewDelegate {
         cover.layer?.masksToBounds = true
         cover.layer?.backgroundColor = Theme.panelHover.cgColor
         cover.translatesAutoresizingMaskIntoConstraints = false
+        // размер картинки фона не должен диктовать размер окна
+        for axis in [NSLayoutConstraint.Orientation.horizontal, .vertical] {
+            cover.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(100), for: axis)
+            cover.setContentHuggingPriority(NSLayoutConstraint.Priority(100), for: axis)
+        }
         playButton = PillButton("Играть") { [weak self] in self?.playSelected() }
         deleteButton = PillButton("Удалить", accent: false) { [weak self] in self?.deleteSelected() }
         let finder = PillButton("В Finder", accent: false) { [weak self] in
@@ -218,7 +225,8 @@ final class SongSelectView: NSView, NSTableViewDataSource, NSTableViewDelegate {
             cover.topAnchor.constraint(equalTo: detail.topAnchor, constant: 18),
             cover.leadingAnchor.constraint(equalTo: detail.leadingAnchor, constant: 18),
             cover.trailingAnchor.constraint(equalTo: detail.trailingAnchor, constant: -18),
-            cover.heightAnchor.constraint(equalTo: cover.widthAnchor, multiplier: 9.0 / 16.0),
+            cover.heightAnchor.constraint(lessThanOrEqualTo: cover.widthAnchor, multiplier: 9.0 / 16.0),
+            cover.heightAnchor.constraint(greaterThanOrEqualToConstant: 0),
             cover.bottomAnchor.constraint(lessThanOrEqualTo: info.topAnchor, constant: -18),
             info.leadingAnchor.constraint(equalTo: detail.leadingAnchor, constant: 22),
             info.trailingAnchor.constraint(equalTo: detail.trailingAnchor, constant: -22),
@@ -227,6 +235,10 @@ final class SongSelectView: NSView, NSTableViewDataSource, NSTableViewDelegate {
             busyStack.centerXAnchor.constraint(equalTo: busy.centerXAnchor),
             busyStack.centerYAnchor.constraint(equalTo: busy.centerYAnchor),
         ])
+        // обложка 16:9, пока хватает высоты; в низком окне сжимается, а не ломает раскладку
+        let ratio = cover.heightAnchor.constraint(equalTo: cover.widthAnchor, multiplier: 9.0 / 16.0)
+        ratio.priority = NSLayoutConstraint.Priority(450)
+        ratio.isActive = true
         for l in [titleLabel, artistLabel, versionLabel, statsLabel, bestLabel] {
             l.widthAnchor.constraint(lessThanOrEqualTo: info.widthAnchor).isActive = true
         }
@@ -562,7 +574,13 @@ final class ResultsView: NSView {
         all.alignment = .centerY
         all.translatesAutoresizingMaskIntoConstraints = false
         addSubview(all)
-        NSLayoutConstraint.activate([all.centerXAnchor.constraint(equalTo: centerXAnchor), all.centerYAnchor.constraint(equalTo: centerYAnchor)])
+        NSLayoutConstraint.activate([
+            all.centerXAnchor.constraint(equalTo: centerXAnchor),
+            all.centerYAnchor.constraint(equalTo: centerYAnchor),
+            all.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -80),
+            info.widthAnchor.constraint(lessThanOrEqualToConstant: 720),
+        ])
+        for l in [title, sub] { l.widthAnchor.constraint(lessThanOrEqualTo: info.widthAnchor).isActive = true }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) не используется") }

@@ -36,6 +36,9 @@ enum Theme {
         l.textColor = color
         l.lineBreakMode = .byTruncatingTail
         l.translatesAutoresizingMaskIntoConstraints = false
+        // длинный текст (названия песен) обрезается многоточием, а не растягивает окно:
+        // сопротивление сжатию ниже, чем у размера окна (500)
+        l.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(250), for: .horizontal)
         return l
     }
 

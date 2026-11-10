@@ -163,10 +163,37 @@ enum SelfTest {
                 g.cacheDisplay(in: g.bounds, to: rep)
             }
             check(drew, "игровой экран рисуется")
+            // песня с очень длинным названием и большой обложкой не должна раздувать окно
+            if let src = lib.maps.first, let folder = src.folder {
+                let long = try? OsuParser.parse(OsuWriter.write(src))
+                long?.artist = "AAA " + String(repeating: "Очень длинный исполнитель ", count: 8)
+                long?.artistUnicode = long?.artist ?? ""
+                long?.title = String(repeating: "Бесконечно длинное название песни ", count: 10)
+                long?.titleUnicode = long?.title ?? ""
+                long?.background = "huge.png"
+                if let l = long {
+                    try? OsuWriter.write(l).write(to: folder.appendingPathComponent("long.osu"), atomically: true, encoding: .utf8)
+                    let big = NSImage(size: NSSize(width: 4000, height: 2600))
+                    big.lockFocus(); NSColor.systemTeal.setFill(); NSRect(x: 0, y: 0, width: 4000, height: 2600).fill(); big.unlockFocus()
+                    if let tiff = big.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                        try? png.write(to: folder.appendingPathComponent("huge.png"))
+                    }
+                }
+            }
             let ss = SongSelectView(library: lib, settings: Settings(defaults: UserDefaults(suiteName: suite) ?? .standard))
-            ss.frame = NSRect(x: 0, y: 0, width: 1280, height: 800)
+            let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 620), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+            win.contentView = ss
             ss.layoutSubtreeIfNeeded()
-            check(ss.mapCount == 6, "список песен")
+            win.layoutIfNeeded()
+            check(ss.mapCount == 7, "список песен")
+            check(win.frame.width < 1000 && win.frame.height < 700, "длинное название и большая обложка не раздувают окно (\(Int(win.frame.width))×\(Int(win.frame.height)))")
+            ss.stopPreview()
+            let resultsWin = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 620), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+            if let longMap = lib.maps.first(where: { $0.fileURL?.lastPathComponent == "long.osu" }) {
+                resultsWin.contentView = ResultsView(session: GameSession(map: longMap), isRecord: false, onRetry: {}, onBack: {})
+                resultsWin.layoutIfNeeded()
+                check(resultsWin.frame.width < 1000, "итоги с длинным названием (\(Int(resultsWin.frame.width)))")
+            }
             ss.stopPreview()
             let r = ResultsView(session: g.session, isRecord: true, onRetry: {}, onBack: {})
             r.frame = NSRect(x: 0, y: 0, width: 1280, height: 800)

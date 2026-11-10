@@ -24,6 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SongSelectDelegate, Ga
         w.backgroundColor = Theme.background
         w.setFrameAutosaveName("TnQkoMusicallyMain")
         if !w.setFrameUsingName("TnQkoMusicallyMain") { w.center() }
+        // если окно раньше раздуло длинным названием — вернуть в пределы экрана
+        if let vis = (w.screen ?? NSScreen.main)?.visibleFrame, !vis.contains(w.frame) {
+            let size = NSSize(width: min(w.frame.width, vis.width), height: min(w.frame.height, vis.height))
+            w.setFrame(NSRect(x: vis.midX - size.width / 2, y: vis.midY - size.height / 2, width: size.width, height: size.height), display: false)
+        }
         window = w
         songSelect = SongSelectView(library: library, settings: settings)
         songSelect.delegate = self
