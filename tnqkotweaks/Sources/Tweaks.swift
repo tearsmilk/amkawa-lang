@@ -4,6 +4,17 @@ import Foundation
 enum TweakValue: Equatable {
     case bool(Bool), int(Int), double(Double), string(String)
 
+    /// `defaults -float` хранит 32-битное число: 0.4 читается как 0.4000000059… — сравниваем с допуском.
+    static func == (a: TweakValue, b: TweakValue) -> Bool {
+        switch (a, b) {
+        case (.bool(let x), .bool(let y)): return x == y
+        case (.int(let x), .int(let y)): return x == y
+        case (.double(let x), .double(let y)): return abs(x - y) < 1e-4
+        case (.string(let x), .string(let y)): return x == y
+        default: return false
+        }
+    }
+
     var plist: Any {
         switch self {
         case .bool(let v): return v
