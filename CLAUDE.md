@@ -34,6 +34,11 @@
   AVFoundation, no deps; `.osu` parser + writer, slider curves L/P/B/C, `GameSession` = rules without rendering (autoplay in `--selftest`),
   `GameView` = Core Graphics + CVDisplayLink, `BeatGen` = tempo/phase detection → 3 generated difficulties for the user's own tracks,
   `.osz` via `/usr/bin/ditto`; `.github/workflows/tnqkomusic-macos.yml`, releases `tnqkomusic-v*`; own code — never copy osu! code or assets; no Figma).
+  `tnqkotweaks/` — TnQkoTweaks (macOS look & behaviour tweaker, 11+ Intel, same stack: Swift + AppKit, no deps; data-driven `Catalog` of
+  `defaults` keys (Dock, appearance/accent, menu bar clock, Finder, screenshots, hot corners, keyboard), written via `/usr/bin/defaults`,
+  original values backed up before first change, one debounced `killall` of Dock / Finder / SystemUIServer / ControlCenter; optional
+  menu-bar CPU / RAM / network counter with timer tolerance; `--selftest` redirects every domain to a test domain; `.github/workflows/tnqkotweaks-macos.yml`,
+  releases `tnqkotweaks-v*`; no Figma).
 - **Epsilon design lives in Figma** (file `P9vRt9ShTejyOkC7fYqWU4`, team Lotus): the UI kit and *every* screen.
   When you add or change a screen, dialog or component in Epsilon, update `epsilon/design/figma/01_ui_kit.js` /
   `02_screens.js` in the same change and run them via the Figma MCP `use_figma` tool (Starter plan has a small
