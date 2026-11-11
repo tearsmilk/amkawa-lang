@@ -1,0 +1,129 @@
+import AVFoundation
+
+/// Музыка + игровые часы. Время берётся из часов аудиоустройства — оно не «дрожит» и не уплывает от звука.
+final class MusicClock {
+    let player: AVAudioPlayer
+    private var startDevice: TimeInterval = 0
+    private var pausedAt: Double = 0
+    private(set) var isRunning = false
+    /// Пользовательское смещение, мс: положительное — удары засчитываются позже.
+    var offsetMs: Double = 0
+
+    init(url: URL) throws {
+        player = try AVAudioPlayer(contentsOf: url)
+        player.prepareToPlay()
+    }
+
+    var duration: Double { player.duration }
+
+    var volume: Float {
+        get { player.volume }
+        set { player.volume = newValue }
+    }
+
+    var seconds: Double { isRunning ? player.deviceCurrentTime - startDevice : pausedAt }
+    var timeMs: Double { seconds * 1000 - offsetMs }
+
+    /// Запуск с позиции (сек); отрицательная позиция — вступление до начала трека.
+    func start(from s: Double) {
+        let now = player.deviceCurrentTime
+        if s < 0 {
+            player.currentTime = 0
+            player.play(atTime: now - s)
+            startDevice = now - s
+        } else if s >= player.duration {
+            player.stop()
+            startDevice = now - s
+        } else {
+            let lead = 0.03
+            player.currentTime = s
+            player.play(atTime: now + lead)
+            startDevice = now + lead - s
+        }
+        isRunning = true
+    }
+
+    func pause() {
+        guard isRunning else { return }
+        pausedAt = seconds
+        player.pause()
+        isRunning = false
+    }
+
+    func resume() { start(from: pausedAt) }
+
+    func stop() {
+        player.stop()
+        isRunning = false
+    }
+}
+
+/// Короткий «тик» при попадании: синтезируется, играется через AVAudioEngine с несколькими голосами.
+final class HitSounds {
+    private let engine = AVAudioEngine()
+    private var voices: [AVAudioPlayerNode] = []
+    private var hit: AVAudioPCMBuffer?
+    private var miss: AVAudioPCMBuffer?
+    private var next = 0
+    var volume: Float = 0.6
+
+    init() {
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1) else { return }
+        // без устройства вывода (CI, отключённые колонки) движок не трогаем: AVAudioEngine бросит исключение
+        let out = engine.outputNode.outputFormat(forBus: 0)
+        guard out.channelCount > 0, out.sampleRate > 0 else { return }
+        hit = Self.synth(format, seconds: 0.14, Self.softTick)
+        miss = Self.synth(format, seconds: 0.3, Self.softThud)
+        for _ in 0..<8 {
+            let node = AVAudioPlayerNode()
+            engine.attach(node)
+            engine.connect(node, to: engine.mainMixerNode, format: format)
+            voices.append(node)
+        }
+        engine.prepare()
+        try? engine.start()
+    }
+
+    var isReady: Bool { engine.isRunning && hit != nil }
+
+    func playHit() { play(hit, gain: 1) }
+    func playComboBreak() { play(miss, gain: 0.8) }
+
+    private func play(_ buffer: AVAudioPCMBuffer?, gain: Float) {
+        guard engine.isRunning, let b = buffer, !voices.isEmpty, volume > 0 else { return }
+        let node = voices[next]
+        next = (next + 1) % voices.count
+        node.volume = volume * gain
+        node.scheduleBuffer(b, at: nil, options: .interrupts, completionHandler: nil)
+        if !node.isPlaying { node.play() }
+    }
+
+    /// Мягкий «тук»: тон 560 Гц, чуть съезжающий сверху, плавная атака, быстрое затухание.
+    static func softTick(_ t: Double) -> Double {
+        let sweep: Double = (260.0 / 70.0) * (1.0 - exp(-70.0 * t))
+        let phase: Double = 2.0 * Double.pi * (560.0 * t + sweep)
+        let attack: Double = 1.0 - exp(-900.0 * t)
+        let body: Double = sin(phase) * 0.5 + sin(2.0 * phase) * 0.08
+        let air: Double = sin(2.0 * Double.pi * 2400.0 * t) * 0.04 * exp(-300.0 * t)
+        return (body * attack + air) * exp(-34.0 * t)
+    }
+
+    /// Сброс комбо: тихий низкий «бум» вниз.
+    static func softThud(_ t: Double) -> Double {
+        let phase: Double = 2.0 * Double.pi * (180.0 * t - 60.0 * t * t)
+        let attack: Double = 1.0 - exp(-400.0 * t)
+        return sin(phase) * 0.35 * attack * exp(-11.0 * t)
+    }
+
+    static func synth(_ format: AVAudioFormat, seconds: Double, _ f: (Double) -> Double) -> AVAudioPCMBuffer? {
+        let frames = AVAudioFrameCount(format.sampleRate * seconds)
+        guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames), let data = buf.floatChannelData?[0] else { return nil }
+        buf.frameLength = frames
+        for i in 0..<Int(frames) {
+            let t = Double(i) / format.sampleRate
+            let fade = min(1, Double(Int(frames) - i) / 200)
+            data[i] = Float(max(-1, min(1, f(t) * fade)))
+        }
+        return buf
+    }
+}

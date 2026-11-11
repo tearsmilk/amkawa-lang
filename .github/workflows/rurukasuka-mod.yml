@@ -1,0 +1,63 @@
+name: rurukaSuka — мод (Fabric)
+
+# push only: for pull_request GitHub matches `paths` against the whole PR diff, which rebuilt every app
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "rurukasuka/**"
+      - ".github/workflows/rurukasuka-mod.yml"
+    tags:
+      - "rurukasuka-v*"
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Опубликовать релиз rurukasuka-v<версия> (пусто — просто собрать)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rurukasuka
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build mod
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/rurukasuka-v* ]]; then V="${GITHUB_REF#refs/tags/rurukasuka-v}"; fi
+          if [[ -n "${{ inputs.release_version }}" ]]; then V="${{ inputs.release_version }}"; fi
+          if [[ -n "${V:-}" ]]; then sed -i "s/^mod_version=.*/mod_version=$V/" gradle.properties; fi
+          ./gradlew build --no-daemon
+          rm -f build/libs/*-sources.jar
+          ls -la build/libs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rurukaSuka-mod
+          path: |
+            rurukasuka/build/libs/rurukasuka-*.jar
+            rurukasuka/build/libs/rurukasuka-mod.json
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/rurukasuka-v') || inputs.release_version != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_version != '' && format('rurukasuka-v{0}', inputs.release_version) || github.ref_name }}
+          name: rurukaSuka ${{ inputs.release_version != '' && inputs.release_version || github.ref_name }}
+          files: |
+            rurukasuka/build/libs/rurukasuka-*.jar
+            rurukasuka/build/libs/rurukasuka-mod.json
